@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { FormEvent, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
+import { supabase } from "@/lib/supabase";
 
 type Ingredient = {
   amount: string;
@@ -10,21 +11,14 @@ type Ingredient = {
   name: string;
 };
 
-type Recipe = {
-  id: number;
-  title: string;
-  ingredients: Ingredient[];
-  instructions: string;
-  tags: string[];
-};
-
 export default function NeuesRezept() {
   const router = useRouter();
 
   const [title, setTitle] = useState("");
   const [instructions, setInstructions] = useState("");
-const [availableTags, setAvailableTags] = useState<string[]>([]);
-const [selectedTags, setSelectedTags] = useState<string[]>([]);
+  const [availableTags, setAvailableTags] = useState<string[]>([]);
+  const [selectedTags, setSelectedTags] = useState<string[]>([]);
+  const [isSaving, setIsSaving] = useState(false);
 
   const [ingredients, setIngredients] = useState<Ingredient[]>([
     {
@@ -33,20 +27,22 @@ const [selectedTags, setSelectedTags] = useState<string[]>([]);
       name: "",
     },
   ]);
-useEffect(() => {
-  const savedTags = localStorage.getItem("recipe-tags");
 
-  if (!savedTags) {
-    return;
-  }
+  useEffect(() => {
+    const savedTags = localStorage.getItem("recipe-tags");
 
-  try {
-    const parsedTags: string[] = JSON.parse(savedTags);
-    setAvailableTags(parsedTags);
-  } catch {
-    setAvailableTags([]);
-  }
-}, []);
+    if (!savedTags) {
+      return;
+    }
+
+    try {
+      const parsedTags: string[] = JSON.parse(savedTags);
+      setAvailableTags(parsedTags);
+    } catch {
+      setAvailableTags([]);
+    }
+  }, []);
+
   function updateIngredient(
     index: number,
     field: keyof Ingredient,
@@ -72,16 +68,16 @@ useEffect(() => {
       },
     ]);
   }
-  
+
   function toggleTag(tag: string) {
-  if (selectedTags.includes(tag)) {
-    setSelectedTags(
-      selectedTags.filter((selectedTag) => selectedTag !== tag)
-    );
-  } else {
-    setSelectedTags([...selectedTags, tag]);
+    if (selectedTags.includes(tag)) {
+      setSelectedTags(
+        selectedTags.filter((selectedTag) => selectedTag !== tag)
+      );
+    } else {
+      setSelectedTags([...selectedTags, tag]);
+    }
   }
-}
 
   function removeIngredient(index: number) {
     if (ingredients.length === 1) {
@@ -93,7 +89,7 @@ useEffect(() => {
     );
   }
 
-  function handleSubmit(event: FormEvent<HTMLFormElement>) {
+  async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
 
     if (!title.trim()) {
@@ -101,32 +97,38 @@ useEffect(() => {
       return;
     }
 
-    const cleanedIngredients = ingredients.filter(
-      (ingredient) => ingredient.name.trim() !== ""
-    );
+    const cleanedIngredients = ingredients
+      .filter((ingredient) => ingredient.name.trim() !== "")
+      .map((ingredient) => ({
+        amount: ingredient.amount.trim(),
+        unit: ingredient.unit.trim(),
+        name: ingredient.name.trim(),
+      }));
 
     if (cleanedIngredients.length === 0) {
       alert("Bitte gib mindestens eine Zutat ein.");
       return;
     }
 
-    const savedRecipes = localStorage.getItem("recipes");
+    setIsSaving(true);
 
-    const recipes: Recipe[] = savedRecipes
-      ? JSON.parse(savedRecipes)
-      : [];
-
-    const newRecipe: Recipe = {
-      id: Date.now(),
+    const { error } = await supabase.from("recipes").insert({
       title: title.trim(),
       ingredients: cleanedIngredients,
       instructions: instructions.trim(),
       tags: selectedTags,
-    };
+      favorite: false,
+      rating: null,
+    });
 
-    recipes.push(newRecipe);
-
-    localStorage.setItem("recipes", JSON.stringify(recipes));
+    if (error) {
+      console.error("Fehler beim Speichern:", error);
+      alert(
+        `Das Rezept konnte nicht gespeichert werden: ${error.message}`
+      );
+      setIsSaving(false);
+      return;
+    }
 
     router.push("/");
   }
@@ -187,7 +189,11 @@ useEffect(() => {
                   <input
                     value={ingredient.amount}
                     onChange={(event) =>
-                      updateIngredient(index, "amount", event.target.value)
+                      updateIngredient(
+                        index,
+                        "amount",
+                        event.target.value
+                      )
                     }
                     placeholder="Menge"
                     className="min-w-0 rounded-lg border border-stone-300 bg-white p-3 text-stone-900"
@@ -196,7 +202,11 @@ useEffect(() => {
                   <input
                     value={ingredient.unit}
                     onChange={(event) =>
-                      updateIngredient(index, "unit", event.target.value)
+                      updateIngredient(
+                        index,
+                        "unit",
+                        event.target.value
+                      )
                     }
                     placeholder="Einheit"
                     className="min-w-0 rounded-lg border border-stone-300 bg-white p-3 text-stone-900"
@@ -205,7 +215,11 @@ useEffect(() => {
                   <input
                     value={ingredient.name}
                     onChange={(event) =>
-                      updateIngredient(index, "name", event.target.value)
+                      updateIngredient(
+                        index,
+                        "name",
+                        event.target.value
+                      )
                     }
                     placeholder="Zutat"
                     className="min-w-0 rounded-lg border border-stone-300 bg-white p-3 text-stone-900"
@@ -235,67 +249,70 @@ useEffect(() => {
             <textarea
               id="instructions"
               value={instructions}
-              onChange={(event) => setInstructions(event.target.value)}
+              onChange={(event) =>
+                setInstructions(event.target.value)
+              }
               rows={9}
               placeholder="Beschreibe die einzelnen Schritte..."
               className="w-full rounded-xl border border-stone-300 bg-white p-3 text-stone-900"
             />
           </div>
 
-         <div>
-  <div className="mb-3 flex items-center justify-between gap-4">
-    <h2 className="font-semibold text-stone-800">
-      Tags
-    </h2>
+          <div>
+            <div className="mb-3 flex items-center justify-between gap-4">
+              <h2 className="font-semibold text-stone-800">
+                Tags
+              </h2>
 
-    <Link
-      href="/tags"
-      className="text-sm font-medium text-green-700 hover:underline"
-    >
-      Tags verwalten
-    </Link>
-  </div>
+              <Link
+                href="/tags"
+                className="text-sm font-medium text-green-700 hover:underline"
+              >
+                Tags verwalten
+              </Link>
+            </div>
 
-  {availableTags.length === 0 ? (
-    <div className="rounded-xl bg-white p-4 text-stone-600">
-      Noch keine Tags vorhanden.
-      <Link
-        href="/tags"
-        className="ml-1 font-medium text-green-700 hover:underline"
-      >
-        Jetzt Tags erstellen
-      </Link>
-    </div>
-  ) : (
-    <div className="flex flex-wrap gap-2">
-      {availableTags.map((tag) => {
-        const isSelected = selectedTags.includes(tag);
+            {availableTags.length === 0 ? (
+              <div className="rounded-xl bg-white p-4 text-stone-600">
+                Noch keine Tags vorhanden.
+                <Link
+                  href="/tags"
+                  className="ml-1 font-medium text-green-700 hover:underline"
+                >
+                  Jetzt Tags erstellen
+                </Link>
+              </div>
+            ) : (
+              <div className="flex flex-wrap gap-2">
+                {availableTags.map((tag) => {
+                  const isSelected = selectedTags.includes(tag);
 
-        return (
-          <button
-            key={tag}
-            type="button"
-            onClick={() => toggleTag(tag)}
-            className={`rounded-full px-4 py-2 text-sm font-medium ${
-              isSelected
-                ? "bg-green-700 text-white"
-                : "bg-white text-stone-700"
-            }`}
-          >
-            {isSelected ? "✓ " : ""}
-            {tag}
-          </button>
-        );
-      })}
-    </div>
-  )}
-</div>
+                  return (
+                    <button
+                      key={tag}
+                      type="button"
+                      onClick={() => toggleTag(tag)}
+                      className={`rounded-full px-4 py-2 text-sm font-medium ${
+                        isSelected
+                          ? "bg-green-700 text-white"
+                          : "bg-white text-stone-700"
+                      }`}
+                    >
+                      {isSelected ? "✓ " : ""}
+                      {tag}
+                    </button>
+                  );
+                })}
+              </div>
+            )}
+          </div>
 
           <button
             type="submit"
-            className="w-full rounded-xl bg-green-700 px-6 py-4 font-semibold text-white"
+            disabled={isSaving}
+            className="w-full rounded-xl bg-green-700 px-6 py-4 font-semibold text-white disabled:cursor-not-allowed disabled:opacity-60"
           >
-            Rezept speichern
+            {isSaving ? "Wird gespeichert..." : "Rezept speichern"}
           </button>
         </form>
       </div>

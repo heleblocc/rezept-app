@@ -1,5 +1,5 @@
 "use client";
-
+import { supabase } from "@/lib/supabase";
 import Navigation from "./components/Navigation";
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
@@ -70,23 +70,24 @@ export default function Home() {
 
   const t = texts[language];
 
-  useEffect(() => {
-    const savedRecipes = localStorage.getItem("recipes");
+useEffect(() => {
+  async function loadRecipes() {
+    const { data, error } = await supabase
+      .from("recipes")
+      .select("*")
+      .order("created_at", { ascending: false });
 
-    if (savedRecipes) {
-      try {
-        const parsedRecipes = JSON.parse(savedRecipes);
-
-        const validRecipes = parsedRecipes.filter(
-          (recipe: Recipe) => Array.isArray(recipe.ingredients)
-        );
-
-        setRecipes(validRecipes);
-      } catch {
-        setRecipes([]);
-      }
+    if (error) {
+      console.error("Rezepte konnten nicht geladen werden:", error);
+      setRecipes([]);
+      return;
     }
-  }, []);
+
+    setRecipes((data ?? []) as Recipe[]);
+  }
+
+  loadRecipes();
+}, []);
 
   useEffect(() => {
     const savedLanguage = localStorage.getItem("app-language");
