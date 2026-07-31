@@ -153,47 +153,41 @@ async function updateRecipe(updatedRecipe: Recipe) {
     });
   }
 
-  function addToShoppingList() {
-    if (!recipe) {
-      return;
+ async function addToShoppingList() {
+  if (!recipe) {
+    return;
+  }
+
+  try {
+    const newItems = recipe.ingredients.map((ingredient) => ({
+      recipe_id: recipe.id,
+      recipe_title: recipe.title,
+      amount: ingredient.amount,
+      unit: ingredient.unit,
+      name: ingredient.name,
+      checked: false,
+    }));
+
+    const { error } = await supabase
+      .from("shopping_list")
+      .insert(newItems);
+
+    if (error) {
+      throw error;
     }
-
-    let shoppingItems: ShoppingItem[] = [];
-
-    const savedItems = localStorage.getItem("shopping-list");
-
-    if (savedItems) {
-      try {
-        const parsedItems: unknown = JSON.parse(savedItems);
-
-        if (Array.isArray(parsedItems)) {
-          shoppingItems = parsedItems as ShoppingItem[];
-        }
-      } catch {
-        shoppingItems = [];
-      }
-    }
-
-    const timestamp = Date.now();
-
-    const newItems: ShoppingItem[] = recipe.ingredients.map(
-      (ingredient, index) => ({
-        id: `${recipe.id}-${timestamp}-${index}`,
-        recipeId: recipe.id,
-        recipeTitle: recipe.title,
-        amount: ingredient.amount,
-        unit: ingredient.unit,
-        name: ingredient.name,
-        checked: false,
-      })
-    );
-
-    const updatedItems = [...shoppingItems, ...newItems];
-
-    localStorage.setItem("shopping-list", JSON.stringify(updatedItems));
 
     alert("Die Zutaten wurden zur Einkaufsliste hinzugefügt.");
+  } catch (error) {
+    console.error(
+      "Zutaten konnten nicht zur Einkaufsliste hinzugefügt werden:",
+      error
+    );
+
+    alert(
+      "Die Zutaten konnten nicht zur Einkaufsliste hinzugefügt werden."
+    );
   }
+}
 
   if (!loaded) {
     return (

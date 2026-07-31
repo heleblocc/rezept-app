@@ -247,22 +247,59 @@ async function deleteGroup(group: GroupedShoppingItem) {
   }
 }
 
-  function clearCheckedItems() {
-    const updatedItems = items.filter((item) => !item.checked);
-    saveItems(updatedItems);
-  }
+ async function clearCheckedItems() {
+  try {
+    const checkedIds = items
+      .filter((item) => item.checked)
+      .map((item) => item.id);
 
-  function clearShoppingList() {
-    const confirmed = window.confirm(
-      "Möchtest du die gesamte Einkaufsliste löschen?"
-    );
-
-    if (!confirmed) {
+    if (checkedIds.length === 0) {
       return;
     }
 
-    saveItems([]);
+    const { error } = await supabase
+      .from("shopping_list")
+      .delete()
+      .in("id", checkedIds);
+
+    if (error) {
+      throw error;
+    }
+
+    setItems((currentItems) =>
+      currentItems.filter((item) => !item.checked)
+    );
+  } catch (error) {
+    console.error(error);
+    alert("Abgehakte Artikel konnten nicht entfernt werden.");
   }
+}
+
+ async function clearShoppingList() {
+  const confirmed = window.confirm(
+    "Möchtest du die gesamte Einkaufsliste löschen?"
+  );
+
+  if (!confirmed) {
+    return;
+  }
+
+  try {
+    const { error } = await supabase
+      .from("shopping_list")
+      .delete()
+      .neq("id", "");
+
+    if (error) {
+      throw error;
+    }
+
+    setItems([]);
+  } catch (error) {
+    console.error(error);
+    alert("Die Einkaufsliste konnte nicht gelöscht werden.");
+  }
+}
 
   if (!loaded) {
     return (
