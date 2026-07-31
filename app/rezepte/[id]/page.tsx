@@ -313,18 +313,14 @@ async function updateRecipe(updatedRecipe: Recipe) {
               </div>
             </div>
 
-            {recipe.tags?.length > 0 && (
-              <div className="mt-5 flex flex-wrap gap-2">
-                {recipe.tags.map((tag) => (
-                  <span
-                    key={tag}
-                    className="rounded-full bg-green-100 px-3 py-1 text-sm text-green-800"
-                  >
-                    {tag}
-                  </span>
-                ))}
-              </div>
-            )}
+            {recipe.tags.map((tag, index) => (
+  <span
+    key={`${tag}-${index}`}
+    className="rounded-full ..."
+  >
+    {tag}
+  </span>
+))}
 
             <section className="mt-9">
               <h2 className="text-xl font-semibold text-stone-900">

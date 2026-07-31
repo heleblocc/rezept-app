@@ -70,25 +70,65 @@ const [oldImageUrl, setOldImageUrl] = useState("");
 
       if (error) throw error;
 
-      const { data: tags } = await supabase
-        .from("tags")
-        .select("name")
-        .order("name");
+     const { data: managedTags, error: managedTagsError } =
+  await supabase
+    .from("tags")
+    .select("name")
+    .order("name");
 
-      setAvailableTags((tags ?? []).map((tag) => tag.name));
+if (managedTagsError) {
+  console.error(
+    "Tags aus der Tags-Tabelle konnten nicht geladen werden:",
+    managedTagsError
+  );
+}
 
-      setTitle(recipe.title);
-      setCookingTime(
-        recipe.cooking_time ? String(recipe.cooking_time) : ""
-      );
-      setInstructions(recipe.instructions ?? "");
-      setImagePreview(recipe.image ?? "");
-      setOldImageUrl(recipe.image ?? "");
+const { data: usedTags, error: usedTagsError } =
+  await supabase
+    .from("recipe_tags")
+    .select("tag")
+    .order("tag");
 
-      setSelectedTags(
-        (recipe.recipe_tags ?? []).map((tag) => tag.tag)
-      );
+if (usedTagsError) {
+  console.error(
+    "Verwendete Rezept-Tags konnten nicht geladen werden:",
+    usedTagsError
+  );
+}
 
+const currentRecipeTags = [
+  ...new Set(
+    (recipe.recipe_tags ?? [])
+      .map((item) => item.tag)
+      .filter(Boolean)
+  ),
+];
+
+const allAvailableTags = [
+  ...new Set([
+    ...(managedTags ?? [])
+      .map((item) => item.name)
+      .filter(Boolean),
+
+    ...(usedTags ?? [])
+      .map((item) => item.tag)
+      .filter(Boolean),
+
+    ...currentRecipeTags,
+  ]),
+].sort((a, b) => a.localeCompare(b, "de"));
+
+setAvailableTags(allAvailableTags);
+setSelectedTags(currentRecipeTags);
+
+setTitle(recipe.title);
+setCookingTime(
+  recipe.cooking_time ? String(recipe.cooking_time) : ""
+);
+
+setInstructions(recipe.instructions ?? "");
+setImagePreview(recipe.image ?? "");
+setOldImageUrl(recipe.image ?? "");
       setIngredients(
         recipe.recipe_ingredients.length > 0
           ? recipe.recipe_ingredients
@@ -182,12 +222,12 @@ async function handleSubmit(event: FormEvent<HTMLFormElement>) {
   }
 
   const cleanedIngredients = ingredients
-    .filter((ingredient) => ingredient.name.trim() !== "")
-    .map((ingredient) => ({
-      amount: ingredient.amount.trim(),
-      unit: ingredient.unit.trim(),
-      name: ingredient.name.trim(),
-    }));
+  .filter((ingredient) => (ingredient.name ?? "").trim() !== "")
+  .map((ingredient) => ({
+    amount: (ingredient.amount ?? "").trim(),
+    unit: (ingredient.unit ?? "").trim(),
+    name: (ingredient.name ?? "").trim(),
+  }));
 
   const parsedCookingTime =
     cookingTime.trim() === "" ? null : Number(cookingTime);
@@ -289,12 +329,12 @@ async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     if (deleteTagsError) {
       throw deleteTagsError;
     }
-
-    if (selectedTags.length > 0) {
+const uniqueSelectedTags = [...new Set(selectedTags)];
+    if (uniqueSelectedTags.length > 0) {
       const { error: tagsError } = await supabase
         .from("recipe_tags")
         .insert(
-          selectedTags.map((tag) => ({
+          uniqueSelectedTags.map((tag) => ({
             recipe_id: recipeId,
             tag,
           }))
@@ -440,7 +480,7 @@ async function handleSubmit(event: FormEvent<HTMLFormElement>) {
                   className="grid grid-cols-[80px_100px_1fr_auto] gap-2"
                 >
                   <input
-                    value={ingredient.amount}
+                    value={ingredient.amount ?? ""}
                     onChange={(event) =>
                       updateIngredient(
                         index,
@@ -453,7 +493,7 @@ async function handleSubmit(event: FormEvent<HTMLFormElement>) {
                   />
 
                   <input
-                    value={ingredient.unit}
+                    value={ingredient.unit ?? ""}
                     onChange={(event) =>
                       updateIngredient(
                         index,
@@ -466,7 +506,7 @@ async function handleSubmit(event: FormEvent<HTMLFormElement>) {
                   />
 
                   <input
-                    value={ingredient.name}
+                    value={ingredient.name ?? ""}
                     onChange={(event) =>
                       updateIngredient(
                         index,

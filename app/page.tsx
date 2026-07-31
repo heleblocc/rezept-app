@@ -1,5 +1,6 @@
 "use client";
 
+import { createWorker } from "tesseract.js";
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
@@ -320,18 +321,11 @@ async function deleteRecipe(id: number) {
                         aria-label={t.imagePlaceholder}
                         className="flex aspect-[4/3] w-full items-center justify-center bg-gradient-to-br from-orange-100 via-stone-100 to-green-100"
                       >
-                        <div className="text-center">
-                          <span
-                            aria-hidden="true"
-                            className="block text-4xl sm:text-6xl"
-                          >
-                            🍝
-                          </span>
-
-                          <span className="mt-2 hidden text-xs text-stone-500 sm:block">
-                            {t.imagePlaceholder}
-                          </span>
-                        </div>
+                       <div className="text-center">
+  <span className="text-xs text-stone-500">
+    {t.imagePlaceholder}
+  </span>
+</div>
                       </div>
                     )}
 
