@@ -1,8 +1,10 @@
 "use client";
 
+import { supabase } from "@/lib/supabase";
 import Link from "next/link";
 import { useParams } from "next/navigation";
 import { useEffect, useState } from "react";
+
 
 type Ingredient = {
   amount: string;
@@ -38,65 +40,96 @@ export default function RecipePage() {
   const [recipe, setRecipe] = useState<Recipe | null>(null);
   const [loaded, setLoaded] = useState(false);
 
-  useEffect(() => {
-    const savedRecipes = localStorage.getItem("recipes");
+useEffect(() => {
+  async function loadRecipe() {
+    const recipeId = Number(params.id);
 
-    if (!savedRecipes) {
+    if (!Number.isFinite(recipeId)) {
+      setRecipe(null);
       setLoaded(true);
       return;
     }
 
     try {
-      const parsedRecipes: unknown = JSON.parse(savedRecipes);
+      const { data, error } = await supabase
+        .from("recipes")
+        .select(`
+          id,
+          title,
+          instructions,
+          cooking_time,
+          image,
+          favorite,
+          rating,
+          recipe_ingredients (
+            amount,
+            unit,
+            name
+          ),
+          recipe_tags (
+            tag
+          )
+        `)
+        .eq("id", recipeId)
+        .single();
 
-      if (!Array.isArray(parsedRecipes)) {
-        setRecipe(null);
-        setLoaded(true);
-        return;
+      if (error) {
+        throw error;
       }
 
-      const recipeId = Number(params.id);
+      setRecipe({
+        id: data.id,
+        title: data.title,
+        instructions: data.instructions ?? "",
+        cookingTime: data.cooking_time ?? undefined,
+        image: data.image ?? undefined,
+        favorite: data.favorite ?? false,
+        rating: data.rating ?? 0,
 
-      const foundRecipe = parsedRecipes.find(
-        (item): item is Recipe =>
-          typeof item === "object" &&
-          item !== null &&
-          "id" in item &&
-          Number((item as Recipe).id) === recipeId
-      );
+        ingredients: (data.recipe_ingredients ?? []).map(
+          (ingredient) => ({
+            amount: ingredient.amount ?? "",
+            unit: ingredient.unit ?? "",
+            name: ingredient.name,
+          })
+        ),
 
-      setRecipe(foundRecipe ?? null);
-    } catch {
+        tags: (data.recipe_tags ?? []).map(
+          (tagEntry) => tagEntry.tag
+        ),
+      });
+    } catch (error) {
+      console.error("Rezept konnte nicht geladen werden:", error);
       setRecipe(null);
     }
 
     setLoaded(true);
-  }, [params.id]);
-
-  function updateRecipe(updatedRecipe: Recipe) {
-    const savedRecipes = localStorage.getItem("recipes");
-
-    if (!savedRecipes) {
-      return;
-    }
-
-    try {
-      const parsedRecipes: unknown = JSON.parse(savedRecipes);
-
-      if (!Array.isArray(parsedRecipes)) {
-        return;
-      }
-
-      const updatedRecipes = parsedRecipes.map((item) =>
-        Number(item.id) === updatedRecipe.id ? updatedRecipe : item
-      );
-
-      localStorage.setItem("recipes", JSON.stringify(updatedRecipes));
-      setRecipe(updatedRecipe);
-    } catch {
-      alert("Die Änderung konnte nicht gespeichert werden.");
-    }
   }
+
+  loadRecipe();
+}, [params.id]);
+
+async function updateRecipe(updatedRecipe: Recipe) {
+  try {
+    const { error } = await supabase
+      .from("recipes")
+      .update({
+        favorite: updatedRecipe.favorite ?? false,
+        rating: updatedRecipe.rating ?? 0,
+        updated_at: new Date().toISOString(),
+      })
+      .eq("id", updatedRecipe.id);
+
+    if (error) {
+      throw error;
+    }
+
+    setRecipe(updatedRecipe);
+  } catch (error) {
+    console.error("Änderung konnte nicht gespeichert werden:", error);
+    alert("Die Änderung konnte nicht gespeichert werden.");
+  }
+}
 
   function toggleFavorite() {
     if (!recipe) {
