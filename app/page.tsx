@@ -230,7 +230,7 @@ function selectTag(tag: string) {
 
   return (
     <>
-      <main className="min-h-screen bg-stone-100 px-4 py-6 pb-32 sm:px-6 sm:py-8 sm:pb-16">
+      <main className="min-h-screen bg-stone-200/70 px-4 py-6 pb-32 sm:px-6 sm:py-8 sm:pb-16">
         <div className="mx-auto max-w-5xl">
           <header className="mb-6 sm:mb-8">
             <h1 className="text-3xl font-bold text-stone-900 sm:text-4xl">
@@ -243,12 +243,27 @@ function selectTag(tag: string) {
           </header>
 
           <section className="mb-7 space-y-4">
-            <input
-              value={search}
-              onChange={(event) => setSearch(event.target.value)}
-              placeholder={t.searchPlaceholder}
-              className="w-full rounded-2xl border border-stone-300 bg-white px-4 py-4 text-stone-900 outline-none transition focus:border-green-700 focus:ring-2 focus:ring-green-100"
-            />
+            <div className="relative">
+  <svg
+    aria-hidden="true"
+    viewBox="0 0 24 24"
+    fill="none"
+    stroke="currentColor"
+    strokeWidth="2"
+    className="pointer-events-none absolute left-4 top-1/2 h-5 w-5 -translate-y-1/2 text-stone-400"
+  >
+    <circle cx="11" cy="11" r="7" />
+    <path d="m20 20-3.5-3.5" />
+  </svg>
+
+  <input
+    value={search}
+    onChange={(event) => setSearch(event.target.value)}
+    placeholder=""
+    aria-label={t.searchPlaceholder}
+    className="w-full rounded-2xl border border-white/70 bg-white/80 py-4 pl-12 pr-4 text-stone-900 shadow-sm backdrop-blur-md outline-none transition duration-300 focus:border-green-700 focus:bg-white focus:ring-2 focus:ring-green-100"
+  />
+</div>
 
             <button
               type="button"
@@ -299,7 +314,7 @@ function selectTag(tag: string) {
           </section>
 
           {filteredRecipes.length === 0 ? (
-            <div className="rounded-2xl bg-white p-6 shadow-sm">
+            <div className="rounded-2xl border border-white/70 bg-white/80 p-6 shadow-md backdrop-blur-sm">
               <p className="text-stone-600">{t.noRecipes}</p>
             </div>
           ) : (
@@ -314,7 +329,7 @@ function selectTag(tag: string) {
       : `/rezepte/${recipe.id}`
   )
 }
-  className="flex min-w-0 cursor-pointer flex-col overflow-hidden rounded-2xl bg-white shadow-sm transition hover:-translate-y-0.5 hover:shadow-md"
+  className="flex min-w-0 cursor-pointer flex-col overflow-hidden rounded-2xl border border-white/70 bg-white/85 shadow-md backdrop-blur-sm transition duration-300 hover:-translate-y-1 hover:bg-white hover:shadow-xl"
 >
                   
                   <div className="relative">

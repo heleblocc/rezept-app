@@ -88,109 +88,119 @@ export default function Navigation() {
   </div>
 </header>
 
-      {menuOpen && (
-        <>
-          <button
-            type="button"
-            onClick={() => setMenuOpen(false)}
-            aria-label={t.close}
-            className="fixed inset-0 z-50 bg-black/60"
-          />
-
-          <aside className="fixed inset-y-0 left-0 z-[60] flex w-80 max-w-[85%] flex-col bg-stone-950 text-white shadow-2xl">
-            <div className="flex items-center justify-end border-b border-stone-800 p-5">
+      <>
   <button
     type="button"
     onClick={() => setMenuOpen(false)}
     aria-label={t.close}
-    className="flex h-10 w-10 items-center justify-center rounded-xl bg-stone-800 text-2xl"
+    className={`fixed inset-0 z-50 bg-black/60 transition-opacity duration-300 ${
+      menuOpen
+        ? "pointer-events-auto opacity-100"
+        : "pointer-events-none opacity-0"
+    }`}
+  />
+
+  <aside
+    className={`fixed inset-y-0 left-0 z-[60] flex w-80 max-w-[85%] flex-col bg-stone-950 text-white shadow-2xl transition-transform duration-300 ease-out ${
+      menuOpen
+        ? "translate-x-0"
+        : "-translate-x-full"
+    }`}
   >
-    ×
-  </button>
-</div>
+    <div className="flex items-center justify-end border-b border-stone-800 p-5">
+      <button
+        type="button"
+        onClick={() => setMenuOpen(false)}
+        aria-label={t.close}
+        className="flex h-10 w-10 items-center justify-center rounded-xl bg-stone-800 text-2xl transition hover:bg-stone-700 active:scale-95"
+      >
+        ×
+      </button>
+    </div>
 
-            <nav className="flex-1 space-y-2 overflow-y-auto p-4">
-              <Link
-                href="/"
-                onClick={() => setMenuOpen(false)}
-                className="block rounded-xl px-4 py-3 hover:bg-stone-800"
-              >
-                {t.recipes}
-              </Link>
+    <nav className="flex-1 space-y-2 overflow-y-auto p-4">
+      <Link
+        href="/"
+        onClick={() => setMenuOpen(false)}
+        className="block rounded-xl px-4 py-3 transition hover:bg-stone-800"
+      >
+        {t.recipes}
+      </Link>
 
-              <Link
-                href="/rezepte/neu"
-                onClick={() => setMenuOpen(false)}
-                className="block rounded-xl px-4 py-3 hover:bg-stone-800"
-              >
-                {t.newRecipe}
-              </Link>
+      <Link
+        href="/rezepte/neu"
+        onClick={() => setMenuOpen(false)}
+        className="block rounded-xl px-4 py-3 transition hover:bg-stone-800"
+      >
+        {t.newRecipe}
+      </Link>
 
-              <Link
-                href="/vorrat"
-                onClick={() => setMenuOpen(false)}
-                className="block rounded-xl px-4 py-3 hover:bg-stone-800"
-              >
-                {t.pantry}
-              </Link>
+      <Link
+        href="/vorrat"
+        onClick={() => setMenuOpen(false)}
+        className="block rounded-xl px-4 py-3 transition hover:bg-stone-800"
+      >
+        {t.pantry}
+      </Link>
 
-              <Link
-                href="/einkaufsliste"
-                onClick={() => setMenuOpen(false)}
-                className="block rounded-xl px-4 py-3 hover:bg-stone-800"
-              >
-                {t.shopping}
-              </Link>
+      <Link
+        href="/einkaufsliste"
+        onClick={() => setMenuOpen(false)}
+        className="block rounded-xl px-4 py-3 transition hover:bg-stone-800"
+      >
+        {t.shopping}
+      </Link>
 
-              <Link
-                href="/inspiration"
-                onClick={() => setMenuOpen(false)}
-                className="block rounded-xl px-4 py-3 hover:bg-stone-800"
-              >
-                {t.inspiration}
-              </Link>
+      <Link
+        href="/inspiration"
+        onClick={() => setMenuOpen(false)}
+        className="block rounded-xl px-4 py-3 transition hover:bg-stone-800"
+      >
+        {t.inspiration}
+      </Link>
 
-              <Link
-                href="/tags"
-                onClick={() => setMenuOpen(false)}
-                className="block rounded-xl px-4 py-3 hover:bg-stone-800"
-              >
-                {t.tags}
-              </Link>
-            </nav>
+      <Link
+        href="/tags"
+        onClick={() => setMenuOpen(false)}
+        className="block rounded-xl px-4 py-3 transition hover:bg-stone-800"
+      >
+        {t.tags}
+      </Link>
+    </nav>
 
-            <div className="border-t border-stone-800 p-5">
-              <p className="mb-3 text-sm text-stone-400">{t.language}</p>
+    <div className="border-t border-stone-800 p-5">
+      <p className="mb-3 text-sm text-stone-400">
+        {t.language}
+      </p>
 
-              <div className="grid grid-cols-2 gap-2">
-                <button
-                  type="button"
-                  onClick={() => changeLanguage("de")}
-                  className={`rounded-xl px-3 py-3 ${
-                    language === "de"
-                      ? "bg-green-700 text-white"
-                      : "bg-stone-800 text-stone-300"
-                  }`}
-                >
-                  Deutsch
-                </button>
+      <div className="grid grid-cols-2 gap-2">
+        <button
+          type="button"
+          onClick={() => changeLanguage("de")}
+          className={`rounded-xl px-3 py-3 transition ${
+            language === "de"
+              ? "bg-green-700 text-white"
+              : "bg-stone-800 text-stone-300 hover:bg-stone-700"
+          }`}
+        >
+          Deutsch
+        </button>
 
-                <button
-                  type="button"
-                  onClick={() => changeLanguage("en")}
-                  className={`rounded-xl px-3 py-3 ${
-                    language === "en"
-                      ? "bg-green-700 text-white"
-                      : "bg-stone-800 text-stone-300"
-                  }`}
-                >
-                  English
-                </button>
-              </div>
-            </div>
-          </aside>
-        </>
-      )}
+        <button
+          type="button"
+          onClick={() => changeLanguage("en")}
+          className={`rounded-xl px-3 py-3 transition ${
+            language === "en"
+              ? "bg-green-700 text-white"
+              : "bg-stone-800 text-stone-300 hover:bg-stone-700"
+          }`}
+        >
+          English
+        </button>
+      </div>
+    </div>
+  </aside>
+</>
     </>
   );
 }
