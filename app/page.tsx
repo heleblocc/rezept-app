@@ -434,7 +434,13 @@ async function deleteRecipe(id: number) {
           )}
         </div>
       </main>
-
+<Link
+  href="/rezepte/neu"
+  className="fixed bottom-6 right-6 z-50 flex h-16 w-16 items-center justify-center rounded-full bg-green-700 text-4xl font-light text-white shadow-xl transition hover:scale-105 hover:bg-green-600 active:scale-95"
+  aria-label={t.newRecipe}
+>
+  +
+</Link>
       
     </>
   );

@@ -3,6 +3,7 @@ import { supabase } from "@/lib/supabase";
 import Link from "next/link";
 import { FormEvent, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
+import { createWorker } from "tesseract.js";
 
 type Ingredient = {
   amount: string;
@@ -33,6 +34,10 @@ export default function NeuesRezept() {
   const [isSaving, setIsSaving] = useState(false);
   const [image, setImage] = useState<File | null>(null);
 const [imagePreview, setImagePreview] = useState("");
+const [importText, setImportText] = useState("");
+const [showImport, setShowImport] = useState(false);
+const [isReadingImage, setIsReadingImage] = useState(false);
+const [ocrProgress, setOcrProgress] = useState(0);
 
   const [ingredients, setIngredients] = useState<Ingredient[]>([
     {
@@ -109,6 +114,183 @@ const [imagePreview, setImagePreview] = useState("");
         : [...currentTags, tag]
     );
   }
+  async function handleImportImage(
+  event: React.ChangeEvent<HTMLInputElement>
+) {
+  const file = event.target.files?.[0];
+
+  if (!file) {
+    return;
+  }
+
+  if (!file.type.startsWith("image/")) {
+    alert("Bitte wähle einen Screenshot oder ein Bild aus.");
+    return;
+  }
+
+  setIsReadingImage(true);
+  setOcrProgress(0);
+
+  try {
+    const worker = await createWorker("deu", 1, {
+      logger: (message) => {
+        if (
+          message.status === "recognizing text" &&
+          typeof message.progress === "number"
+        ) {
+          setOcrProgress(Math.round(message.progress * 100));
+        }
+      },
+    });
+
+    const result = await worker.recognize(file);
+
+    await worker.terminate();
+
+    const recognizedText = result.data.text.trim();
+
+    if (!recognizedText) {
+      alert("Auf dem Bild konnte kein Text erkannt werden.");
+      return;
+    }
+
+    setImportText(recognizedText);
+  } catch (error) {
+    console.error("Fehler bei der Texterkennung:", error);
+    alert("Der Text konnte aus dem Bild nicht erkannt werden.");
+  } finally {
+    setIsReadingImage(false);
+    event.target.value = "";
+  }
+}
+function importRecipeText() {
+  const cleanedText = importText.trim();
+
+  if (!cleanedText) {
+    alert("Bitte füge zuerst einen Rezepttext ein.");
+    return;
+  }
+
+  const lines = cleanedText
+    .split("\n")
+    .map((line) => line.trim())
+    .filter(Boolean);
+
+  if (lines.length === 0) {
+    return;
+  }
+
+  const ingredientsHeadingIndex = lines.findIndex((line) =>
+    /^(zutaten|ingredients)\s*:?\s*$/i.test(line)
+  );
+
+  const instructionsHeadingIndex = lines.findIndex((line) =>
+    /^(zubereitung|anleitung|zubereitungsweise|instructions)\s*:?\s*$/i.test(
+      line
+    )
+  );
+
+  const firstHeadingIndex = [
+    ingredientsHeadingIndex,
+    instructionsHeadingIndex,
+  ]
+    .filter((index) => index >= 0)
+    .sort((a, b) => a - b)[0];
+
+  const importedTitle =
+    firstHeadingIndex !== undefined
+      ? lines.slice(0, firstHeadingIndex).join(" ")
+      : lines[0];
+
+  if (importedTitle) {
+    setTitle(importedTitle);
+  }
+
+  let ingredientLines: string[] = [];
+
+  if (ingredientsHeadingIndex >= 0) {
+    const ingredientEnd =
+      instructionsHeadingIndex > ingredientsHeadingIndex
+        ? instructionsHeadingIndex
+        : lines.length;
+
+    ingredientLines = lines.slice(
+      ingredientsHeadingIndex + 1,
+      ingredientEnd
+    );
+  }
+
+  const parsedIngredients: Ingredient[] = ingredientLines
+    .map((line) => line.replace(/^[-•*]\s*/, "").trim())
+    .filter(Boolean)
+    .map((line) => {
+      const match = line.match(
+        /^(\d+(?:[.,]\d+)?(?:\/\d+)?|½|¼|¾)?\s*([a-zA-ZäöüÄÖÜß]+)?\s*(.*)$/
+      );
+
+      if (!match) {
+        return {
+          amount: "",
+          unit: "",
+          name: line,
+        };
+      }
+
+      const amount = match[1] ?? "";
+      const possibleUnit = match[2] ?? "";
+      const remainingName = match[3]?.trim() ?? "";
+
+      const knownUnits = [
+        "g",
+        "kg",
+        "ml",
+        "l",
+        "el",
+        "tl",
+        "prise",
+        "prisen",
+        "dose",
+        "dosen",
+        "packung",
+        "packungen",
+        "stück",
+        "stk",
+        "bund",
+        "tasse",
+        "tassen",
+      ];
+
+      const isKnownUnit = knownUnits.includes(
+        possibleUnit.toLowerCase()
+      );
+
+      return {
+        amount,
+        unit: isKnownUnit ? possibleUnit : "",
+        name: isKnownUnit
+          ? remainingName
+          : [possibleUnit, remainingName].filter(Boolean).join(" "),
+      };
+    })
+    .filter((ingredient) => ingredient.name.trim());
+
+  if (parsedIngredients.length > 0) {
+    setIngredients(parsedIngredients);
+  }
+
+  if (instructionsHeadingIndex >= 0) {
+    const importedInstructions = lines
+      .slice(instructionsHeadingIndex + 1)
+      .join("\n");
+
+    setInstructions(importedInstructions);
+  } else if (ingredientsHeadingIndex < 0) {
+    setInstructions(lines.slice(1).join("\n"));
+  }
+
+  setShowImport(false);
+}
+
 function handleImageChange(event: React.ChangeEvent<HTMLInputElement>) {
   const file = event.target.files?.[0];
 
@@ -320,7 +502,99 @@ function handleImageChange(event: React.ChangeEvent<HTMLInputElement>) {
         <h1 className="mb-8 text-3xl font-bold text-stone-900 sm:text-4xl">
           Neues Rezept
         </h1>
+<div className="mb-7 rounded-2xl bg-white p-5 shadow-sm">
+  <button
+    type="button"
+    onClick={() => setShowImport((current) => !current)}
+    className="flex w-full items-center justify-between font-semibold text-stone-900"
+  >
+    <span>Text oder Screenshot importieren</span>
+    <span>{showImport ? "−" : "+"}</span>
+  </button>
 
+  {showImport && (
+    <div className="mt-5">
+      <label
+  htmlFor="importImage"
+  className="flex cursor-pointer flex-col items-center justify-center rounded-xl border-2 border-dashed border-stone-300 bg-stone-50 p-5 text-center transition hover:border-green-600 hover:bg-green-50"
+>
+  <span className="font-medium text-stone-800">
+    Screenshot oder Rezeptbild auswählen
+  </span>
+
+  <span className="mt-1 text-sm text-stone-500">
+    Der Text wird automatisch erkannt
+  </span>
+</label>
+
+<input
+  id="importImage"
+  type="file"
+  accept="image/*"
+  onChange={handleImportImage}
+  disabled={isReadingImage}
+  className="hidden"
+/>
+
+{isReadingImage && (
+  <div className="mt-4 rounded-xl bg-green-50 p-4">
+    <p className="text-sm font-medium text-green-900">
+      Bild wird gelesen: {ocrProgress} %
+    </p>
+
+    <div className="mt-2 h-2 overflow-hidden rounded-full bg-green-100">
+      <div
+        className="h-full bg-green-700 transition-all"
+        style={{ width: `${ocrProgress}%` }}
+      />
+    </div>
+
+    <p className="mt-2 text-xs text-green-800">
+      Beim ersten Mal kann das Laden etwas länger dauern.
+    </p>
+  </div>
+)}
+
+<div className="my-5 flex items-center gap-3">
+  <div className="h-px flex-1 bg-stone-200" />
+  <span className="text-sm text-stone-500">oder Text einfügen</span>
+  <div className="h-px flex-1 bg-stone-200" />
+</div>
+      <label
+        htmlFor="importText"
+        className="mb-2 block text-sm font-medium text-stone-700"
+      >
+        Rezepttext einfügen
+      </label>
+
+      <textarea
+        id="importText"
+        value={importText}
+        onChange={(event) => setImportText(event.target.value)}
+        rows={10}
+        placeholder={`Kartoffelsuppe
+
+Zutaten:
+500 g Kartoffeln
+1 Zwiebel
+750 ml Gemüsebrühe
+
+Zubereitung:
+Kartoffeln schälen und schneiden.
+Alles zusammen kochen.`}
+        className="w-full resize-y rounded-xl border border-stone-300 bg-white p-3 text-stone-900 outline-none focus:border-green-700 focus:ring-2 focus:ring-green-100"
+      />
+
+      <button
+        type="button"
+        onClick={importRecipeText}
+        className="mt-3 w-full rounded-xl bg-stone-800 px-5 py-3 font-medium text-white transition hover:bg-stone-700"
+      >
+        Text übernehmen
+      </button>
+    </div>
+  )}
+</div>
         <form onSubmit={handleSubmit} className="space-y-7">
           <div>
             <label
