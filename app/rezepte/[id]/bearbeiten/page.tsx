@@ -38,58 +38,74 @@ const [image, setImage] = useState<File | null>(null);
 const [imagePreview, setImagePreview] = useState("");
 const [oldImageUrl, setOldImageUrl] = useState("");
 
-  useEffect(() => {
-    const savedRecipes = localStorage.getItem("recipes");
-    const savedTags = localStorage.getItem("recipe-tags");
-if (savedTags) {
-  try {
-    const parsedTags: string[] = JSON.parse(savedTags);
-    setAvailableTags(parsedTags);
-  } catch {
-    setAvailableTags([]);
-  }
-}
-    if (!savedRecipes) {
+ useEffect(() => {
+  async function loadRecipe() {
+    const recipeId = Number(params.id);
+
+    if (!Number.isFinite(recipeId)) {
       setLoaded(true);
       return;
     }
 
     try {
-      const recipes: Recipe[] = JSON.parse(savedRecipes);
-      const recipeId = Number(params.id);
+      const { data: recipe, error } = await supabase
+        .from("recipes")
+        .select(`
+          id,
+          title,
+          instructions,
+          cooking_time,
+          image,
+          recipe_ingredients (
+            amount,
+            unit,
+            name
+          ),
+          recipe_tags (
+            tag
+          )
+        `)
+        .eq("id", recipeId)
+        .single();
 
-      const foundRecipe = recipes.find(
-        (recipe) => recipe.id === recipeId
+      if (error) throw error;
+
+      const { data: tags } = await supabase
+        .from("tags")
+        .select("name")
+        .order("name");
+
+      setAvailableTags((tags ?? []).map((tag) => tag.name));
+
+      setTitle(recipe.title);
+      setCookingTime(
+        recipe.cooking_time ? String(recipe.cooking_time) : ""
+      );
+      setInstructions(recipe.instructions ?? "");
+      setImagePreview(recipe.image ?? "");
+      setOldImageUrl(recipe.image ?? "");
+
+      setSelectedTags(
+        (recipe.recipe_tags ?? []).map((tag) => tag.tag)
       );
 
-      if (!foundRecipe) {
-        setLoaded(true);
-        return;
-      }
-
-      setTitle(foundRecipe.title);
-setCookingTime(
-  foundRecipe.cookingTime
-    ? String(foundRecipe.cookingTime)
-    : ""
-);
-setInstructions(foundRecipe.instructions);
-setImagePreview(foundRecipe.image ?? "");
-setOldImageUrl(foundRecipe.image ?? "");
-      setSelectedTags(foundRecipe.tags ?? []);
       setIngredients(
-        foundRecipe.ingredients.length > 0
-          ? foundRecipe.ingredients
+        recipe.recipe_ingredients.length > 0
+          ? recipe.recipe_ingredients
           : [{ amount: "", unit: "", name: "" }]
       );
 
       setRecipeFound(true);
-    } catch {
+    } catch (error) {
+      console.error(error);
       setRecipeFound(false);
     }
 
     setLoaded(true);
-  }, [params.id]);
+  }
+
+  loadRecipe();
+}, [params.id]);
 
   function updateIngredient(
     index: number,

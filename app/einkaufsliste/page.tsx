@@ -1,5 +1,6 @@
 "use client";
 
+import { supabase } from "@/lib/supabase";
 import Link from "next/link";
 import {
   FormEvent,
@@ -36,20 +37,47 @@ export default function EinkaufslistePage() {
 const [manualUnit, setManualUnit] = useState("");
 const [manualName, setManualName] = useState("");
 
-  useEffect(() => {
-    const savedItems = localStorage.getItem("shopping-list");
+useEffect(() => {
+  async function loadShoppingList() {
+    try {
+      const { data, error } = await supabase
+        .from("shopping_list")
+        .select(`
+          id,
+          recipe_id,
+          recipe_title,
+          amount,
+          unit,
+          name,
+          checked
+        `)
+        .order("created_at", { ascending: true });
 
-    if (savedItems) {
-      try {
-        const parsedItems: ShoppingItem[] = JSON.parse(savedItems);
-        setItems(parsedItems);
-      } catch {
-        setItems([]);
+      if (error) {
+        throw error;
       }
+
+      const loadedItems: ShoppingItem[] = (data ?? []).map((item) => ({
+        id: item.id,
+        recipeId: item.recipe_id ?? 0,
+        recipeTitle: item.recipe_title,
+        amount: item.amount ?? "",
+        unit: item.unit ?? "",
+        name: item.name,
+        checked: item.checked ?? false,
+      }));
+
+      setItems(loadedItems);
+    } catch (error) {
+      console.error("Einkaufsliste konnte nicht geladen werden:", error);
+      setItems([]);
     }
 
     setLoaded(true);
-  }, []);
+  }
+
+  loadShoppingList();
+}, []);
 
   const groupedItems = useMemo(() => {
     const groups = new Map<string, GroupedShoppingItem>();
@@ -112,7 +140,7 @@ const [manualName, setManualName] = useState("");
       JSON.stringify(updatedItems)
     );
   }
-function addManualItem(event: FormEvent<HTMLFormElement>) {
+async function addManualItem(event: FormEvent<HTMLFormElement>) {
   event.preventDefault();
 
   const cleanedName = manualName.trim();
@@ -122,21 +150,49 @@ function addManualItem(event: FormEvent<HTMLFormElement>) {
     return;
   }
 
-  const newItem: ShoppingItem = {
-    id: `manual-${Date.now()}`,
-    recipeId: 0,
-    recipeTitle: "Manuell hinzugefügt",
-    amount: manualAmount.trim(),
-    unit: manualUnit.trim(),
-    name: cleanedName,
-    checked: false,
-  };
+  try {
+    const { data, error } = await supabase
+      .from("shopping_list")
+      .insert({
+        recipe_id: null,
+        recipe_title: "Manuell hinzugefügt",
+        amount: manualAmount.trim(),
+        unit: manualUnit.trim(),
+        name: cleanedName,
+        checked: false,
+      })
+      .select()
+      .single();
 
-  saveItems([...items, newItem]);
+    if (error) {
+      throw error;
+    }
 
-  setManualAmount("");
-  setManualUnit("");
-  setManualName("");
+    const newItem: ShoppingItem = {
+      id: data.id,
+      recipeId: data.recipe_id ?? 0,
+      recipeTitle: data.recipe_title,
+      amount: data.amount ?? "",
+      unit: data.unit ?? "",
+      name: data.name,
+      checked: data.checked ?? false,
+    };
+
+    setItems((currentItems) => [...currentItems, newItem]);
+
+    setManualAmount("");
+    setManualUnit("");
+    setManualName("");
+  } catch (error) {
+  console.error("Artikel konnte nicht hinzugefügt werden:", error);
+
+  const message =
+    error instanceof Error
+      ? error.message
+      : JSON.stringify(error);
+
+  alert(`Der Artikel konnte nicht hinzugefügt werden:\n${message}`);
+}
 }
   function toggleGroup(group: GroupedShoppingItem) {
     const shouldBeChecked = !group.checked;
