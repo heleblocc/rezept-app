@@ -1,38 +1,45 @@
 "use client";
 
 import Link from "next/link";
-import { usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
 
 type Language = "de" | "en";
 
 const labels = {
   de: {
-    appName: "Meine Rezeptküche",
+    appName: "HB Rezepte",
+    menu: "Menü öffnen",
+    close: "Menü schließen",
     recipes: "Meine Rezepte",
+    newRecipe: "Neues Rezept",
     pantry: "Wir haben Brot zu Hause",
-    inspiration: "Inspiration",
     shopping: "Einkaufsliste",
+    inspiration: "Inspiration",
     tags: "Tags",
+    language: "Sprache",
   },
   en: {
-    appName: "My Recipe Kitchen",
+    appName: "HB Recipes",
+    menu: "Open menu",
+    close: "Close menu",
     recipes: "My Recipes",
-    pantry: "We Have Food at Home",
-    inspiration: "Inspiration",
+    newRecipe: "New Recipe",
+    pantry: "Pantry",
     shopping: "Shopping List",
+    inspiration: "Inspiration",
     tags: "Tags",
+    language: "Language",
   },
 };
 
 export default function Navigation() {
-  const pathname = usePathname();
-  const [language, setLanguage] =
-    useState<Language>("de");
+  const [menuOpen, setMenuOpen] = useState(false);
+  const [language, setLanguage] = useState<Language>("de");
+
+  const t = labels[language];
 
   useEffect(() => {
-    const savedLanguage =
-      localStorage.getItem("app-language");
+    const savedLanguage = window.localStorage.getItem("app-language");
 
     if (savedLanguage === "de" || savedLanguage === "en") {
       setLanguage(savedLanguage);
@@ -41,11 +48,7 @@ export default function Navigation() {
 
   function changeLanguage(newLanguage: Language) {
     setLanguage(newLanguage);
-
-    localStorage.setItem(
-      "app-language",
-      newLanguage
-    );
+    window.localStorage.setItem("app-language", newLanguage);
 
     window.dispatchEvent(
       new CustomEvent("language-change", {
@@ -54,91 +57,132 @@ export default function Navigation() {
     );
   }
 
-  function isActive(href: string) {
-    if (href === "/") {
-      return pathname === "/";
-    }
-
-    return pathname.startsWith(href);
-  }
-
-  const navigationItems = [
-    {
-      href: "/",
-      label: labels[language].recipes,
-    },
-    {
-      href: "/vorrat",
-      label: labels[language].pantry,
-    },
-    {
-      href: "/inspiration",
-      label: labels[language].inspiration,
-    },
-    {
-      href: "/einkaufsliste",
-      label: labels[language].shopping,
-    },
-    {
-      href: "/tags",
-      label: labels[language].tags,
-    },
-  ];
-
   return (
-    <header className="border-b border-stone-200 bg-white">
-      <div className="mx-auto flex max-w-6xl flex-col gap-4 px-5 py-4 sm:flex-row sm:items-center sm:justify-between">
-        <Link
-          href="/"
-          className="text-xl font-bold text-stone-900"
-        >
-          {labels[language].appName}
-        </Link>
+    <>
+      <header className="sticky top-0 z-40 bg-stone-950 text-white">
+        <div className="mx-auto flex h-16 max-w-7xl items-center justify-between px-4">
+          <button
+            type="button"
+            onClick={() => setMenuOpen(true)}
+            aria-label={t.menu}
+            className="flex h-11 w-11 items-center justify-center rounded-xl bg-stone-800 text-2xl"
+          >
+            ☰
+          </button>
 
-        <div className="flex flex-col gap-3 sm:items-end">
-          <div className="flex gap-2">
-            <button
-              type="button"
-              onClick={() => changeLanguage("de")}
-              className={`rounded-lg px-3 py-1 text-sm font-medium ${
-                language === "de"
-                  ? "bg-green-700 text-white"
-                  : "bg-stone-100 text-stone-700"
-              }`}
-            >
-              DE
-            </button>
+          <Link href="/" className="text-lg font-semibold">
+            {t.appName}
+          </Link>
 
-            <button
-              type="button"
-              onClick={() => changeLanguage("en")}
-              className={`rounded-lg px-3 py-1 text-sm font-medium ${
-                language === "en"
-                  ? "bg-green-700 text-white"
-                  : "bg-stone-100 text-stone-700"
-              }`}
-            >
-              EN
-            </button>
-          </div>
-
-          <nav className="flex flex-wrap gap-2">
-            {navigationItems.map((item) => (
-              <Link
-                key={item.href}
-                href={item.href}
-                className={`rounded-xl px-4 py-2 text-sm font-medium transition ${
-                  isActive(item.href)
-                    ? "bg-green-700 text-white"
-                    : "bg-stone-100 text-stone-700 hover:bg-stone-200"
-                }`}
-              >
-                {item.label}
-              </Link>
-            ))}
-          </nav>
+          <div className="h-11 w-11" />
         </div>
-      </div>
-    </header>
+      </header>
+
+      {menuOpen && (
+        <>
+          <button
+            type="button"
+            onClick={() => setMenuOpen(false)}
+            aria-label={t.close}
+            className="fixed inset-0 z-50 bg-black/60"
+          />
+
+          <aside className="fixed inset-y-0 left-0 z-[60] flex w-80 max-w-[85%] flex-col bg-stone-950 text-white shadow-2xl">
+            <div className="flex items-center justify-between border-b border-stone-800 p-5">
+              <p className="text-xl font-semibold">{t.appName}</p>
+
+              <button
+                type="button"
+                onClick={() => setMenuOpen(false)}
+                aria-label={t.close}
+                className="flex h-10 w-10 items-center justify-center rounded-xl bg-stone-800 text-2xl"
+              >
+                ×
+              </button>
+            </div>
+
+            <nav className="flex-1 space-y-2 overflow-y-auto p-4">
+              <Link
+                href="/"
+                onClick={() => setMenuOpen(false)}
+                className="block rounded-xl px-4 py-3 hover:bg-stone-800"
+              >
+                {t.recipes}
+              </Link>
+
+              <Link
+                href="/rezepte/neu"
+                onClick={() => setMenuOpen(false)}
+                className="block rounded-xl px-4 py-3 hover:bg-stone-800"
+              >
+                {t.newRecipe}
+              </Link>
+
+              <Link
+                href="/vorrat"
+                onClick={() => setMenuOpen(false)}
+                className="block rounded-xl px-4 py-3 hover:bg-stone-800"
+              >
+                {t.pantry}
+              </Link>
+
+              <Link
+                href="/einkaufsliste"
+                onClick={() => setMenuOpen(false)}
+                className="block rounded-xl px-4 py-3 hover:bg-stone-800"
+              >
+                {t.shopping}
+              </Link>
+
+              <Link
+                href="/inspiration"
+                onClick={() => setMenuOpen(false)}
+                className="block rounded-xl px-4 py-3 hover:bg-stone-800"
+              >
+                {t.inspiration}
+              </Link>
+
+              <Link
+                href="/tags"
+                onClick={() => setMenuOpen(false)}
+                className="block rounded-xl px-4 py-3 hover:bg-stone-800"
+              >
+                {t.tags}
+              </Link>
+            </nav>
+
+            <div className="border-t border-stone-800 p-5">
+              <p className="mb-3 text-sm text-stone-400">{t.language}</p>
+
+              <div className="grid grid-cols-2 gap-2">
+                <button
+                  type="button"
+                  onClick={() => changeLanguage("de")}
+                  className={`rounded-xl px-3 py-3 ${
+                    language === "de"
+                      ? "bg-green-700 text-white"
+                      : "bg-stone-800 text-stone-300"
+                  }`}
+                >
+                  Deutsch
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => changeLanguage("en")}
+                  className={`rounded-xl px-3 py-3 ${
+                    language === "en"
+                      ? "bg-green-700 text-white"
+                      : "bg-stone-800 text-stone-300"
+                  }`}
+                >
+                  English
+                </button>
+              </div>
+            </div>
+          </aside>
+        </>
+      )}
+    </>
   );
 }

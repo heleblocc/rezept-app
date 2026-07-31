@@ -16,6 +16,20 @@ type Recipe = {
   ingredients: Ingredient[];
   instructions: string;
   tags: string[];
+  favorite?: boolean;
+  rating?: number;
+  cookingTime?: number;
+  image?: string;
+};
+
+type ShoppingItem = {
+  id: string;
+  recipeId: number;
+  recipeTitle: string;
+  amount: string;
+  unit: string;
+  name: string;
+  checked: boolean;
 };
 
 export default function RecipePage() {
@@ -24,67 +38,145 @@ export default function RecipePage() {
   const [recipe, setRecipe] = useState<Recipe | null>(null);
   const [loaded, setLoaded] = useState(false);
 
-  function addToShoppingList() {
-  if (!recipe) {
-    return;
-  }
-
-  const savedItems = localStorage.getItem("shopping-list");
-
-  const shoppingItems = savedItems
-    ? JSON.parse(savedItems)
-    : [];
-
-  const newItems = recipe.ingredients.map((ingredient, index) => ({
-    id: `${recipe.id}-${Date.now()}-${index}`,
-    recipeId: recipe.id,
-    recipeTitle: recipe.title,
-    amount: ingredient.amount,
-    unit: ingredient.unit,
-    name: ingredient.name,
-    checked: false,
-  }));
-
-  const updatedItems = [...shoppingItems, ...newItems];
-
-  localStorage.setItem(
-    "shopping-list",
-    JSON.stringify(updatedItems)
-  );
-
-  alert("Die Zutaten wurden zur Einkaufsliste hinzugefügt.");
-}
-
   useEffect(() => {
     const savedRecipes = localStorage.getItem("recipes");
 
-    if (savedRecipes) {
-      const recipes: Recipe[] = JSON.parse(savedRecipes);
+    if (!savedRecipes) {
+      setLoaded(true);
+      return;
+    }
+
+    try {
+      const parsedRecipes: unknown = JSON.parse(savedRecipes);
+
+      if (!Array.isArray(parsedRecipes)) {
+        setRecipe(null);
+        setLoaded(true);
+        return;
+      }
+
       const recipeId = Number(params.id);
 
-      const foundRecipe = recipes.find(
-        (item) => item.id === recipeId
+      const foundRecipe = parsedRecipes.find(
+        (item): item is Recipe =>
+          typeof item === "object" &&
+          item !== null &&
+          "id" in item &&
+          Number((item as Recipe).id) === recipeId
       );
 
       setRecipe(foundRecipe ?? null);
+    } catch {
+      setRecipe(null);
     }
 
     setLoaded(true);
   }, [params.id]);
 
+  function updateRecipe(updatedRecipe: Recipe) {
+    const savedRecipes = localStorage.getItem("recipes");
+
+    if (!savedRecipes) {
+      return;
+    }
+
+    try {
+      const parsedRecipes: unknown = JSON.parse(savedRecipes);
+
+      if (!Array.isArray(parsedRecipes)) {
+        return;
+      }
+
+      const updatedRecipes = parsedRecipes.map((item) =>
+        Number(item.id) === updatedRecipe.id ? updatedRecipe : item
+      );
+
+      localStorage.setItem("recipes", JSON.stringify(updatedRecipes));
+      setRecipe(updatedRecipe);
+    } catch {
+      alert("Die Änderung konnte nicht gespeichert werden.");
+    }
+  }
+
+  function toggleFavorite() {
+    if (!recipe) {
+      return;
+    }
+
+    updateRecipe({
+      ...recipe,
+      favorite: !recipe.favorite,
+    });
+  }
+
+  function setRating(rating: number) {
+    if (!recipe) {
+      return;
+    }
+
+    updateRecipe({
+      ...recipe,
+      rating,
+    });
+  }
+
+  function addToShoppingList() {
+    if (!recipe) {
+      return;
+    }
+
+    let shoppingItems: ShoppingItem[] = [];
+
+    const savedItems = localStorage.getItem("shopping-list");
+
+    if (savedItems) {
+      try {
+        const parsedItems: unknown = JSON.parse(savedItems);
+
+        if (Array.isArray(parsedItems)) {
+          shoppingItems = parsedItems as ShoppingItem[];
+        }
+      } catch {
+        shoppingItems = [];
+      }
+    }
+
+    const timestamp = Date.now();
+
+    const newItems: ShoppingItem[] = recipe.ingredients.map(
+      (ingredient, index) => ({
+        id: `${recipe.id}-${timestamp}-${index}`,
+        recipeId: recipe.id,
+        recipeTitle: recipe.title,
+        amount: ingredient.amount,
+        unit: ingredient.unit,
+        name: ingredient.name,
+        checked: false,
+      })
+    );
+
+    const updatedItems = [...shoppingItems, ...newItems];
+
+    localStorage.setItem("shopping-list", JSON.stringify(updatedItems));
+
+    alert("Die Zutaten wurden zur Einkaufsliste hinzugefügt.");
+  }
+
   if (!loaded) {
     return (
-      <main className="min-h-screen bg-stone-100 p-8">
-        Rezept wird geladen...
+      <main className="min-h-screen bg-stone-100 px-5 py-8">
+        <div className="mx-auto max-w-3xl text-stone-600">
+          Rezept wird geladen...
+        </div>
       </main>
     );
   }
 
   if (!recipe) {
     return (
-      <main className="min-h-screen bg-stone-100 p-8">
+      <main className="min-h-screen bg-stone-100 px-5 py-8">
         <div className="mx-auto max-w-3xl">
-          <h1 className="text-3xl font-bold">
+          <h1 className="text-3xl font-bold text-stone-900">
             Rezept nicht gefunden
           </h1>
 
@@ -100,80 +192,152 @@ export default function RecipePage() {
   }
 
   return (
-    <main className="min-h-screen bg-stone-100 px-5 py-8">
+    <main className="min-h-screen bg-stone-100 px-4 py-6 pb-24 sm:px-6 sm:py-8">
       <div className="mx-auto max-w-3xl">
         <Link
           href="/"
-          className="mb-6 block text-green-700 hover:underline"
+          className="mb-6 inline-block text-green-700 hover:underline"
         >
           ← Zurück zur Übersicht
         </Link>
 
-        <article className="rounded-2xl bg-white p-8 shadow-sm">
-   <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
-  <h1 className="text-4xl font-bold text-stone-900">
-    {recipe.title}
-  </h1>
-
-  <div className="flex flex-wrap gap-2">
-    <button
-      type="button"
-      onClick={addToShoppingList}
-      className="rounded-xl bg-green-700 px-4 py-2 font-medium text-white"
-    >
-      Zur Einkaufsliste
-    </button>
-
-    <Link
-      href={`/rezepte/${recipe.id}/bearbeiten`}
-      className="rounded-xl bg-stone-200 px-4 py-2 font-medium text-stone-800"
-    >
-      Bearbeiten
-    </Link>
-  </div>
-</div>
-          {recipe.tags?.length > 0 && (
-            <div className="mt-4 flex flex-wrap gap-2">
-              {recipe.tags.map((tag) => (
-                <span
-                  key={tag}
-                  className="rounded-full bg-green-100 px-3 py-1 text-sm text-green-800"
-                >
-                  {tag}
+        <article className="overflow-hidden rounded-2xl bg-white shadow-sm">
+          <div className="relative">
+            {recipe.image ? (
+              <img
+                src={recipe.image}
+                alt={recipe.title}
+                className="aspect-[16/9] w-full object-cover"
+              />
+            ) : (
+              <div className="flex aspect-[16/9] w-full items-center justify-center bg-gradient-to-br from-orange-100 via-stone-100 to-green-100">
+                <span className="text-sm font-medium text-stone-500">
+                  Kein Rezeptbild vorhanden
                 </span>
-              ))}
-            </div>
-          )}
+              </div>
+            )}
 
-          <section className="mt-8">
-            <h2 className="text-xl font-semibold text-stone-900">
-              Zutaten
-            </h2>
+            <button
+              type="button"
+              onClick={toggleFavorite}
+              aria-label="Favorit ändern"
+              aria-pressed={recipe.favorite === true}
+              className={`absolute right-4 top-4 flex h-12 w-12 items-center justify-center rounded-full bg-white/95 text-3xl shadow-md transition hover:scale-105 active:scale-90 ${
+                recipe.favorite ? "text-red-500" : "text-stone-500"
+              }`}
+            >
+              {recipe.favorite ? "♥" : "♡"}
+            </button>
+          </div>
 
-            <ul className="mt-4 space-y-2">
-              {recipe.ingredients.map((ingredient, index) => (
-                <li
-                  key={index}
-                  className="border-b border-stone-100 pb-2 text-stone-700"
+          <div className="p-5 sm:p-8">
+            <div className="flex flex-col gap-5 sm:flex-row sm:items-start sm:justify-between">
+              <div className="min-w-0">
+                <h1 className="break-words text-3xl font-bold text-stone-900 sm:text-4xl">
+                  {recipe.title}
+                </h1>
+
+                <div className="mt-3 flex items-center gap-0.5">
+                  {[1, 2, 3, 4, 5].map((star) => (
+                    <button
+                      key={star}
+                      type="button"
+                      onClick={() => setRating(star)}
+                      className={`text-2xl transition hover:scale-110 sm:text-3xl ${
+                        star <= (recipe.rating ?? 0)
+                          ? "text-yellow-500"
+                          : "text-stone-300"
+                      }`}
+                      aria-label={`${star} Sterne vergeben`}
+                    >
+                      ★
+                    </button>
+                  ))}
+                </div>
+
+                <div className="mt-4 flex flex-wrap gap-2 text-sm text-stone-600">
+                  <span className="rounded-full bg-stone-100 px-3 py-1.5">
+                    {recipe.cookingTime && recipe.cookingTime > 0
+                      ? `${recipe.cookingTime} Minuten`
+                      : "Keine Kochzeit angegeben"}
+                  </span>
+
+                  <span className="rounded-full bg-stone-100 px-3 py-1.5">
+                    {recipe.ingredients.length} Zutaten
+                  </span>
+                </div>
+              </div>
+
+              <div className="flex shrink-0 flex-wrap gap-2">
+                <button
+                  type="button"
+                  onClick={addToShoppingList}
+                  className="rounded-xl bg-green-700 px-4 py-2.5 font-medium text-white transition hover:bg-green-600"
                 >
-                  <span className="font-medium">
-                    {ingredient.amount} {ingredient.unit}
-                  </span>{" "}
-                  {ingredient.name}
-                </li>
-              ))}
-            </ul>
-          </section>
+                  Zur Einkaufsliste
+                </button>
 
-          <section className="mt-8">
-            <h2 className="text-xl font-semibold text-stone-900">
-              Zubereitung
-            </h2>
+                <Link
+                  href={`/rezepte/${recipe.id}/bearbeiten`}
+                  className="rounded-xl bg-stone-200 px-4 py-2.5 font-medium text-stone-800 transition hover:bg-stone-300"
+                >
+                  Bearbeiten
+                </Link>
+              </div>
+            </div>
 
-            <p className="mt-4 whitespace-pre-line leading-7 text-stone-700">
-              {recipe.instructions}
-            </p>
-          </section>
+            {recipe.tags?.length > 0 && (
+              <div className="mt-5 flex flex-wrap gap-2">
+                {recipe.tags.map((tag) => (
+                  <span
+                    key={tag}
+                    className="rounded-full bg-green-100 px-3 py-1 text-sm text-green-800"
+                  >
+                    {tag}
+                  </span>
+                ))}
+              </div>
+            )}
+
+            <section className="mt-9">
+              <h2 className="text-xl font-semibold text-stone-900">
+                Zutaten
+              </h2>
+
+              <ul className="mt-4 divide-y divide-stone-100 rounded-xl border border-stone-100">
+                {recipe.ingredients.map((ingredient, index) => (
+                  <li
+                    key={index}
+                    className="flex gap-2 px-4 py-3 text-stone-700"
+                  >
+                    <span className="min-w-fit font-medium text-stone-900">
+                      {[ingredient.amount, ingredient.unit]
+                        .filter(Boolean)
+                        .join(" ")}
+                    </span>
+
+                    <span>{ingredient.name}</span>
+                  </li>
+                ))}
+              </ul>
+            </section>
+
+            <section className="mt-9">
+              <h2 className="text-xl font-semibold text-stone-900">
+                Zubereitung
+              </h2>
+
+              {recipe.instructions.trim() ? (
+                <p className="mt-4 whitespace-pre-line leading-7 text-stone-700">
+                  {recipe.instructions}
+                </p>
+              ) : (
+                <p className="mt-4 text-stone-500">
+                  Für dieses Rezept wurde noch keine Zubereitung eingetragen.
+                </p>
+              )}
+            </section>
+          </div>
         </article>
       </div>
     </main>

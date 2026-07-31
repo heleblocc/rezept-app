@@ -1,5 +1,5 @@
 "use client";
-
+import { supabase } from "@/lib/supabase";
 import Link from "next/link";
 import { FormEvent, useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
@@ -16,19 +16,27 @@ type Recipe = {
   ingredients: Ingredient[];
   instructions: string;
   tags: string[];
+  favorite?: boolean;
+  rating?: number;
+  cookingTime?: number;
+  image?: string;
 };
 
 export default function RezeptBearbeiten() {
   const params = useParams<{ id: string }>();
   const router = useRouter();
 
-  const [title, setTitle] = useState("");
+   const [title, setTitle] = useState("");
+  const [cookingTime, setCookingTime] = useState("");
   const [instructions, setInstructions] = useState("");
- const [availableTags, setAvailableTags] = useState<string[]>([]);
-const [selectedTags, setSelectedTags] = useState<string[]>([]);
+  const [availableTags, setAvailableTags] = useState<string[]>([]);
+  const [selectedTags, setSelectedTags] = useState<string[]>([]);
   const [ingredients, setIngredients] = useState<Ingredient[]>([]);
   const [loaded, setLoaded] = useState(false);
   const [recipeFound, setRecipeFound] = useState(false);
+const [image, setImage] = useState<File | null>(null);
+const [imagePreview, setImagePreview] = useState("");
+const [oldImageUrl, setOldImageUrl] = useState("");
 
   useEffect(() => {
     const savedRecipes = localStorage.getItem("recipes");
@@ -60,7 +68,14 @@ if (savedTags) {
       }
 
       setTitle(foundRecipe.title);
-      setInstructions(foundRecipe.instructions);
+setCookingTime(
+  foundRecipe.cookingTime
+    ? String(foundRecipe.cookingTime)
+    : ""
+);
+setInstructions(foundRecipe.instructions);
+setImagePreview(foundRecipe.image ?? "");
+setOldImageUrl(foundRecipe.image ?? "");
       setSelectedTags(foundRecipe.tags ?? []);
       setIngredients(
         foundRecipe.ingredients.length > 0
@@ -110,7 +125,26 @@ if (savedTags) {
     setSelectedTags([...selectedTags, tag]);
   }
 }
+function handleImageChange(
+  event: React.ChangeEvent<HTMLInputElement>
+) {
+  const file = event.target.files?.[0];
 
+  if (!file) return;
+
+  if (!file.type.startsWith("image/")) {
+    alert("Bitte wähle ein Bild aus.");
+    return;
+  }
+
+  if (file.size > 5 * 1024 * 1024) {
+    alert("Das Bild darf maximal 5 MB groß sein.");
+    return;
+  }
+
+  setImage(file);
+  setImagePreview(URL.createObjectURL(file));
+}
   function removeIngredient(index: number) {
     if (ingredients.length === 1) {
       return;
@@ -123,68 +157,145 @@ if (savedTags) {
     );
   }
 
-  function handleSubmit(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
+async function handleSubmit(event: FormEvent<HTMLFormElement>) {
+  event.preventDefault();
 
-    if (!title.trim()) {
-      alert("Bitte gib einen Rezeptnamen ein.");
-      return;
-    }
+  if (!title.trim()) {
+    alert("Bitte gib einen Rezeptnamen ein.");
+    return;
+  }
 
-    const cleanedIngredients = ingredients.filter(
-      (ingredient) => ingredient.name.trim() !== ""
-    );
+  const cleanedIngredients = ingredients
+    .filter((ingredient) => ingredient.name.trim() !== "")
+    .map((ingredient) => ({
+      amount: ingredient.amount.trim(),
+      unit: ingredient.unit.trim(),
+      name: ingredient.name.trim(),
+    }));
 
-    if (cleanedIngredients.length === 0) {
-      alert("Bitte gib mindestens eine Zutat ein.");
-      return;
-    }
+  const parsedCookingTime =
+    cookingTime.trim() === "" ? null : Number(cookingTime);
 
-    const tags = selectedTags;
+  if (
+    parsedCookingTime !== null &&
+    (!Number.isFinite(parsedCookingTime) || parsedCookingTime <= 0)
+  ) {
+    alert("Bitte gib eine gültige Kochzeit ein.");
+    return;
+  }
 
-    const savedRecipes = localStorage.getItem("recipes");
-    const savedTags = localStorage.getItem("recipe-tags");
+  if (cleanedIngredients.length === 0) {
+    alert("Bitte gib mindestens eine Zutat ein.");
+    return;
+  }
 
-if (savedTags) {
+  const recipeId = Number(params.id);
+
+  if (!Number.isFinite(recipeId)) {
+    alert("Ungültige Rezept-ID.");
+    return;
+  }
+
   try {
-    const parsedTags: string[] = JSON.parse(savedTags);
-    setAvailableTags(parsedTags);
-  } catch {
-    setAvailableTags([]);
+    let imageUrl = oldImageUrl;
+
+    if (image) {
+      const fileExtension =
+        image.name.split(".").pop()?.toLowerCase() || "jpg";
+
+      const safeFileName = `${Date.now()}-${crypto.randomUUID()}.${fileExtension}`;
+      const filePath = `recipes/${safeFileName}`;
+
+      const { error: uploadError } = await supabase.storage
+        .from("recipe-images")
+        .upload(filePath, image, {
+          cacheControl: "3600",
+          upsert: false,
+          contentType: image.type,
+        });
+
+      if (uploadError) {
+        alert(`Bild konnte nicht hochgeladen werden: ${uploadError.message}`);
+        return;
+      }
+
+      const { data } = supabase.storage
+        .from("recipe-images")
+        .getPublicUrl(filePath);
+
+      imageUrl = data.publicUrl;
+    }
+
+    const { error: recipeError } = await supabase
+      .from("recipes")
+      .update({
+        title: title.trim(),
+        instructions: instructions.trim(),
+        cooking_time: parsedCookingTime,
+        image: imageUrl || null,
+        updated_at: new Date().toISOString(),
+      })
+      .eq("id", recipeId);
+
+    if (recipeError) {
+      throw recipeError;
+    }
+
+    const { error: deleteIngredientsError } = await supabase
+      .from("recipe_ingredients")
+      .delete()
+      .eq("recipe_id", recipeId);
+
+    if (deleteIngredientsError) {
+      throw deleteIngredientsError;
+    }
+
+    const { error: ingredientsError } = await supabase
+      .from("recipe_ingredients")
+      .insert(
+        cleanedIngredients.map((ingredient) => ({
+          recipe_id: recipeId,
+          amount: ingredient.amount,
+          unit: ingredient.unit,
+          name: ingredient.name,
+        }))
+      );
+
+    if (ingredientsError) {
+      throw ingredientsError;
+    }
+
+    const { error: deleteTagsError } = await supabase
+      .from("recipe_tags")
+      .delete()
+      .eq("recipe_id", recipeId);
+
+    if (deleteTagsError) {
+      throw deleteTagsError;
+    }
+
+    if (selectedTags.length > 0) {
+      const { error: tagsError } = await supabase
+        .from("recipe_tags")
+        .insert(
+          selectedTags.map((tag) => ({
+            recipe_id: recipeId,
+            tag,
+          }))
+        );
+
+      if (tagsError) {
+        throw tagsError;
+      }
+    }
+
+    router.push(`/rezepte/${recipeId}`);
+    router.refresh();
+  } catch (error) {
+    console.error("Rezept konnte nicht gespeichert werden:", error);
+    alert("Das Rezept konnte nicht gespeichert werden.");
   }
 }
-
-    if (!savedRecipes) {
-      alert("Die gespeicherten Rezepte wurden nicht gefunden.");
-      return;
-    }
-
-    try {
-      const recipes: Recipe[] = JSON.parse(savedRecipes);
-      const recipeId = Number(params.id);
-
-      const updatedRecipes = recipes.map((recipe) =>
-        recipe.id === recipeId
-          ? {
-              ...recipe,
-              title: title.trim(),
-              ingredients: cleanedIngredients,
-              instructions: instructions.trim(),
-              tags: selectedTags,
-            }
-          : recipe
-      );
-
-      localStorage.setItem(
-        "recipes",
-        JSON.stringify(updatedRecipes)
-      );
-
-      router.push(`/rezepte/${recipeId}`);
-    } catch {
-      alert("Das Rezept konnte nicht gespeichert werden.");
-    }
-  }
 
   if (!loaded) {
     return (
@@ -243,7 +354,54 @@ if (savedTags) {
               className="w-full rounded-xl border border-stone-300 bg-white p-3 text-stone-900"
             />
           </div>
+          <div>
+  <label
+    htmlFor="cookingTime"
+    className="mb-2 block font-semibold text-stone-800"
+  >
+    Kochzeit
+  </label>
 
+  <div className="relative">
+    <input
+      id="cookingTime"
+      type="number"
+      min="1"
+      value={cookingTime}
+      onChange={(event) => setCookingTime(event.target.value)}
+      placeholder="30"
+      className="w-full rounded-xl border border-stone-300 bg-white p-3 pr-24 text-stone-900"
+    />
+
+    <span className="pointer-events-none absolute right-4 top-1/2 -translate-y-1/2 text-sm text-stone-500">
+      Minuten
+    </span>
+  </div>
+</div>
+<div>
+  <label
+    htmlFor="recipeImage"
+    className="mb-2 block font-semibold text-stone-800"
+  >
+    Rezeptbild
+  </label>
+
+  <input
+    id="recipeImage"
+    type="file"
+    accept="image/*"
+    onChange={handleImageChange}
+    className="mb-4"
+  />
+
+  {imagePreview && (
+    <img
+      src={imagePreview}
+      alt="Rezeptbild"
+      className="h-64 w-full rounded-xl object-cover"
+    />
+  )}
+</div>
           <div>
             <div className="mb-3 flex items-center justify-between">
               <h2 className="font-semibold text-stone-800">
