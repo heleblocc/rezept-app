@@ -2,7 +2,12 @@
 
 import { createWorker } from "tesseract.js";
 import Link from "next/link";
-import { useEffect, useMemo, useState } from "react";
+import {
+  Suspense,
+  useEffect,
+  useMemo,
+  useState,
+} from "react";
 import {
   useRouter,
   useSearchParams,
@@ -59,7 +64,7 @@ const texts = {
   },
 };
 
-export default function Home() {
+function HomeContent() {
   const router = useRouter();
     const searchParams = useSearchParams();
     
@@ -422,5 +427,18 @@ function selectTag(tag: string) {
 </Link>
       
     </>
+  );
+}
+export default function Home() {
+  return (
+    <Suspense
+      fallback={
+        <main className="min-h-screen bg-stone-100 p-8">
+          Rezepte werden geladen...
+        </main>
+      }
+    >
+      <HomeContent />
+    </Suspense>
   );
 }
