@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
+import { useRouter } from "next/navigation";
 import { getRecipes } from "@/lib/recipes";
 import { supabase } from "@/lib/supabase";
 
@@ -59,6 +60,7 @@ const texts = {
 };
 
 export default function Home() {
+  const router = useRouter();
   const [recipes, setRecipes] = useState<Recipe[]>([]);
   const [search, setSearch] = useState("");
   const [selectedTag, setSelectedTag] = useState("");
@@ -301,9 +303,11 @@ async function deleteRecipe(id: number) {
             <div className="grid grid-cols-2 gap-3 sm:gap-5">
               {filteredRecipes.map((recipe) => (
                 <article
-                  key={recipe.id}
-                  className="flex min-w-0 flex-col overflow-hidden rounded-2xl bg-white shadow-sm transition hover:-translate-y-0.5 hover:shadow-md"
-                >
+  key={recipe.id}
+  onClick={() => router.push(`/rezepte/${recipe.id}`)}
+  className="flex min-w-0 cursor-pointer flex-col overflow-hidden rounded-2xl bg-white shadow-sm transition hover:-translate-y-0.5 hover:shadow-md"
+>
+                  
                   <div className="relative">
                     {recipe.image ? (
                       <img
@@ -333,7 +337,10 @@ async function deleteRecipe(id: number) {
 
                     <button
                       type="button"
-                      onClick={() => toggleFavorite(recipe.id)}
+                      onClick={(event) => {
+  event.stopPropagation();
+  toggleFavorite(recipe.id);
+}}
                       aria-label={t.favoriteLabel}
                       aria-pressed={recipe.favorite === true}
                       className={`absolute right-2 top-2 flex h-10 w-10 items-center justify-center rounded-full bg-white/95 text-2xl shadow-md backdrop-blur transition hover:scale-105 active:scale-90 sm:right-3 sm:top-3 ${
@@ -356,7 +363,10 @@ async function deleteRecipe(id: number) {
                         <button
                           key={star}
                           type="button"
-                          onClick={() => setRating(recipe.id, star)}
+                          onClick={(event) => {
+  event.stopPropagation();
+  setRating(recipe.id, star);
+}}
                           className={`text-base transition hover:scale-110 sm:text-2xl ${
                             star <= (recipe.rating ?? 0)
                               ? "text-yellow-500"
@@ -408,7 +418,10 @@ async function deleteRecipe(id: number) {
 
                       <button
                         type="button"
-                        onClick={() => deleteRecipe(recipe.id)}
+                        onClick={(event) => {
+  event.stopPropagation();
+  deleteRecipe(recipe.id);
+}}
                         className="self-start rounded-lg bg-red-50 px-2.5 py-2 text-xs text-red-700 transition hover:bg-red-100 sm:px-3 sm:text-sm"
                       >
                         {t.delete}
@@ -422,14 +435,7 @@ async function deleteRecipe(id: number) {
         </div>
       </main>
 
-      <Link
-        href="/rezepte/neu"
-        aria-label={t.newRecipe}
-        title={t.newRecipe}
-        className="fixed bottom-6 right-5 z-40 flex h-16 w-16 items-center justify-center rounded-full bg-green-700 text-4xl font-light leading-none text-white shadow-xl transition hover:bg-green-600 active:scale-95 sm:right-6"
-      >
-        +
-      </Link>
+      
     </>
   );
 }
