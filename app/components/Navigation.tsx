@@ -1,13 +1,14 @@
 "use client";
-
+import Image from "next/image";
 import Link from "next/link";
 import { useEffect, useState } from "react";
+
 
 type Language = "de" | "en";
 
 const labels = {
   de: {
-    appName: "HB Rezepte",
+    
     menu: "Menü öffnen",
     close: "Menü schließen",
     recipes: "Meine Rezepte",
@@ -19,7 +20,7 @@ const labels = {
     language: "Sprache",
   },
   en: {
-    appName: "HB Recipes",
+   
     menu: "Open menu",
     close: "Close menu",
     recipes: "My Recipes",
@@ -60,23 +61,32 @@ export default function Navigation() {
   return (
     <>
       <header className="sticky top-0 z-40 bg-stone-950 text-white">
-        <div className="mx-auto flex h-16 max-w-7xl items-center justify-between px-4">
-          <button
-            type="button"
-            onClick={() => setMenuOpen(true)}
-            aria-label={t.menu}
-            className="flex h-11 w-11 items-center justify-center rounded-xl bg-stone-800 text-2xl"
-          >
-            ☰
-          </button>
+  <div className="relative mx-auto flex h-16 max-w-7xl items-center px-4">
+    <button
+      type="button"
+      onClick={() => setMenuOpen(true)}
+      aria-label={t.menu}
+      className="flex h-11 w-11 items-center justify-center rounded-xl bg-stone-800 text-2xl"
+    >
+      ☰
+    </button>
 
-          <Link href="/" className="text-lg font-semibold">
-            {t.appName}
-          </Link>
-
-          <div className="h-11 w-11" />
-        </div>
-      </header>
+    <Link
+      href="/"
+      aria-label="Zur Startseite"
+      className="absolute left-1/2 -translate-x-1/2"
+    >
+      <Image
+  src="/icon-512.png"
+  alt="Logo"
+  width={52}
+  height={52}
+  priority
+  className="h-12 w-12 rounded-xl object-cover"
+ />
+    </Link>
+  </div>
+</header>
 
       {menuOpen && (
         <>
@@ -88,18 +98,16 @@ export default function Navigation() {
           />
 
           <aside className="fixed inset-y-0 left-0 z-[60] flex w-80 max-w-[85%] flex-col bg-stone-950 text-white shadow-2xl">
-            <div className="flex items-center justify-between border-b border-stone-800 p-5">
-              <p className="text-xl font-semibold">{t.appName}</p>
-
-              <button
-                type="button"
-                onClick={() => setMenuOpen(false)}
-                aria-label={t.close}
-                className="flex h-10 w-10 items-center justify-center rounded-xl bg-stone-800 text-2xl"
-              >
-                ×
-              </button>
-            </div>
+            <div className="flex items-center justify-end border-b border-stone-800 p-5">
+  <button
+    type="button"
+    onClick={() => setMenuOpen(false)}
+    aria-label={t.close}
+    className="flex h-10 w-10 items-center justify-center rounded-xl bg-stone-800 text-2xl"
+  >
+    ×
+  </button>
+</div>
 
             <nav className="flex-1 space-y-2 overflow-y-auto p-4">
               <Link
