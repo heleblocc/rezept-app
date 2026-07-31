@@ -194,20 +194,36 @@ async function addManualItem(event: FormEvent<HTMLFormElement>) {
   alert(`Der Artikel konnte nicht hinzugefügt werden:\n${message}`);
 }
 }
-  function toggleGroup(group: GroupedShoppingItem) {
-    const shouldBeChecked = !group.checked;
+async function toggleGroup(group: GroupedShoppingItem) {
+  const shouldBeChecked = !group.checked;
 
-    const updatedItems = items.map((item) =>
-      group.ids.includes(item.id)
-        ? {
-            ...item,
-            checked: shouldBeChecked,
-          }
-        : item
+  try {
+    const { error } = await supabase
+      .from("shopping_list")
+      .update({
+        checked: shouldBeChecked,
+      })
+      .in("id", group.ids);
+
+    if (error) {
+      throw error;
+    }
+
+    setItems((currentItems) =>
+      currentItems.map((item) =>
+        group.ids.includes(item.id)
+          ? {
+              ...item,
+              checked: shouldBeChecked,
+            }
+          : item
+      )
     );
-
-    saveItems(updatedItems);
+  } catch (error) {
+    console.error("Artikel konnte nicht aktualisiert werden:", error);
+    alert("Der Artikel konnte nicht aktualisiert werden.");
   }
+}
 
   function deleteGroup(group: GroupedShoppingItem) {
     const updatedItems = items.filter(
