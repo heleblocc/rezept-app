@@ -35,9 +35,7 @@ const texts = {
     ingredients: "Zutaten",
     cookingTime: "Min.",
     noCookingTime: "Keine Zeitangabe",
-    openRecipe: "Öffnen",
-    delete: "Löschen",
-    deleteQuestion: "Möchtest du dieses Rezept wirklich löschen?",
+  
     favoriteLabel: "Favorit ändern",
     ratingLabel: "Sterne vergeben",
     imagePlaceholder: "Kein Rezeptbild vorhanden",
@@ -51,9 +49,7 @@ const texts = {
     ingredients: "ingredients",
     cookingTime: "min.",
     noCookingTime: "No time specified",
-    openRecipe: "Open",
-    delete: "Delete",
-    deleteQuestion: "Do you really want to delete this recipe?",
+    
     favoriteLabel: "Change favorite",
     ratingLabel: "stars",
     imagePlaceholder: "No recipe image available",
@@ -200,31 +196,7 @@ async function setRating(id: number, rating: number) {
   }
 }
 
-async function deleteRecipe(id: number) {
-  const confirmed = window.confirm(t.deleteQuestion);
 
-  if (!confirmed) {
-    return;
-  }
-
-  try {
-    const { error } = await supabase
-      .from("recipes")
-      .delete()
-      .eq("id", id);
-
-    if (error) {
-      throw error;
-    }
-
-    setRecipes((currentRecipes) =>
-      currentRecipes.filter((recipe) => recipe.id !== id)
-    );
-  } catch (error) {
-    console.error("Rezept konnte nicht gelöscht werden:", error);
-    alert("Das Rezept konnte nicht gelöscht werden.");
-  }
-}
 
   return (
     <>
@@ -402,25 +374,7 @@ async function deleteRecipe(id: number) {
                       </div>
                     )}
 
-                    <div className="mt-auto flex flex-col gap-2 pt-4 sm:flex-row sm:items-center sm:justify-between sm:pt-5">
-                      <Link
-                        href={`/rezepte/${recipe.id}`}
-                        className="font-medium text-green-700 hover:underline"
-                      >
-                        {t.openRecipe}
-                      </Link>
-
-                      <button
-                        type="button"
-                        onClick={(event) => {
-  event.stopPropagation();
-  deleteRecipe(recipe.id);
-}}
-                        className="self-start rounded-lg bg-red-50 px-2.5 py-2 text-xs text-red-700 transition hover:bg-red-100 sm:px-3 sm:text-sm"
-                      >
-                        {t.delete}
-                      </button>
-                    </div>
+                    
                   </div>
                 </article>
               ))}

@@ -2,7 +2,7 @@
 
 import { supabase } from "@/lib/supabase";
 import Link from "next/link";
-import { useParams } from "next/navigation";
+import { useParams, useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 
 
@@ -36,6 +36,7 @@ type ShoppingItem = {
 
 export default function RecipePage() {
   const params = useParams();
+    const router = useRouter();
 
   const [recipe, setRecipe] = useState<Recipe | null>(null);
   const [loaded, setLoaded] = useState(false);
@@ -188,7 +189,63 @@ async function updateRecipe(updatedRecipe: Recipe) {
     );
   }
 }
+async function deleteRecipe() {
+  if (!recipe) {
+    return;
+  }
 
+  const confirmed = window.confirm(
+    `Möchtest du „${recipe.title}“ wirklich löschen?`
+  );
+
+  if (!confirmed) {
+    return;
+  }
+
+  try {
+    const { error: ingredientsError } = await supabase
+      .from("recipe_ingredients")
+      .delete()
+      .eq("recipe_id", recipe.id);
+
+    if (ingredientsError) {
+      throw ingredientsError;
+    }
+
+    const { error: tagsError } = await supabase
+      .from("recipe_tags")
+      .delete()
+      .eq("recipe_id", recipe.id);
+
+    if (tagsError) {
+      throw tagsError;
+    }
+
+    const { error: shoppingListError } = await supabase
+      .from("shopping_list")
+      .delete()
+      .eq("recipe_id", recipe.id);
+
+    if (shoppingListError) {
+      throw shoppingListError;
+    }
+
+    const { error: recipeError } = await supabase
+      .from("recipes")
+      .delete()
+      .eq("id", recipe.id);
+
+    if (recipeError) {
+      throw recipeError;
+    }
+
+    router.push("/");
+    router.refresh();
+  } catch (error) {
+    console.error("Rezept konnte nicht gelöscht werden:", error);
+    alert("Das Rezept konnte nicht gelöscht werden.");
+  }
+}
   if (!loaded) {
     return (
       <main className="min-h-screen bg-stone-100 px-5 py-8">
@@ -295,28 +352,36 @@ async function updateRecipe(updatedRecipe: Recipe) {
                 </div>
               </div>
 
-              <div className="flex shrink-0 flex-wrap gap-2">
-                <button
-                  type="button"
-                  onClick={addToShoppingList}
-                  className="rounded-xl bg-green-700 px-4 py-2.5 font-medium text-white transition hover:bg-green-600"
-                >
-                  Zur Einkaufsliste
-                </button>
+             <div className="flex shrink-0 flex-wrap gap-2">
+  <button
+    type="button"
+    onClick={addToShoppingList}
+    className="rounded-xl bg-green-700 px-4 py-2.5 font-medium text-white transition hover:bg-green-600"
+  >
+    Zur Einkaufsliste
+  </button>
 
-                <Link
-                  href={`/rezepte/${recipe.id}/bearbeiten`}
-                  className="rounded-xl bg-stone-200 px-4 py-2.5 font-medium text-stone-800 transition hover:bg-stone-300"
-                >
-                  Bearbeiten
-                </Link>
-              </div>
-            </div>
+  <Link
+    href={`/rezepte/${recipe.id}/bearbeiten`}
+    className="rounded-xl bg-stone-200 px-4 py-2.5 font-medium text-stone-800 transition hover:bg-stone-300"
+  >
+    Bearbeiten
+  </Link>
 
-            {recipe.tags.map((tag, index) => (
+    <button
+    type="button"
+    onClick={deleteRecipe}
+    className="rounded-xl bg-red-100 px-4 py-2.5 font-medium text-red-700 transition hover:bg-red-200"
+  >
+    Rezept löschen
+  </button>
+</div>
+</div>
+
+{recipe.tags.map((tag, index) => (
   <span
     key={`${tag}-${index}`}
-    className="rounded-full ..."
+    className="rounded-full bg-green-100 px-3 py-1 text-sm text-green-800"
   >
     {tag}
   </span>
