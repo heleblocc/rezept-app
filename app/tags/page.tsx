@@ -2,74 +2,134 @@
 
 import Link from "next/link";
 import { FormEvent, useEffect, useState } from "react";
+import { supabase } from "@/lib/supabase";
 
 export default function TagsPage() {
   const [tags, setTags] = useState<string[]>([]);
   const [newTag, setNewTag] = useState("");
 
   useEffect(() => {
-    const savedTags = localStorage.getItem("recipe-tags");
+  async function loadTags() {
+    const { data: managedTags, error: managedTagsError } =
+      await supabase
+        .from("tags")
+        .select("name");
 
-    if (savedTags) {
-      try {
-        const parsedTags: string[] = JSON.parse(savedTags);
-        setTags(parsedTags);
-      } catch {
-        setTags([]);
-      }
+    if (managedTagsError) {
+      console.error(
+        "Tags aus der Tags-Tabelle konnten nicht geladen werden:",
+        managedTagsError
+      );
     }
-  }, []);
 
-  function saveTags(updatedTags: string[]) {
-    setTags(updatedTags);
+    const { data: usedTags, error: usedTagsError } =
+      await supabase
+        .from("recipe_tags")
+        .select("tag");
 
-    localStorage.setItem(
-      "recipe-tags",
-      JSON.stringify(updatedTags)
-    );
+    if (usedTagsError) {
+      console.error(
+        "Tags aus Rezepten konnten nicht geladen werden:",
+        usedTagsError
+      );
+    }
+
+    const allTags = [
+      ...new Set([
+        ...(managedTags ?? [])
+          .map((item) => item.name)
+          .filter(Boolean),
+
+        ...(usedTags ?? [])
+          .map((item) => item.tag)
+          .filter(Boolean),
+      ]),
+    ].sort((a, b) => a.localeCompare(b, "de"));
+
+    setTags(allTags);
   }
 
-  function addTag(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
+  loadTags();
+}, []);
 
-    const cleanedTag = newTag.trim();
 
-    if (!cleanedTag) {
-      return;
-    }
+  async function addTag(event: FormEvent<HTMLFormElement>) {
+  event.preventDefault();
 
-    const tagAlreadyExists = tags.some(
-      (tag) => tag.toLowerCase() === cleanedTag.toLowerCase()
-    );
+  const cleanedTag = newTag.trim();
 
-    if (tagAlreadyExists) {
-      alert("Diesen Tag gibt es bereits.");
-      return;
-    }
+  if (!cleanedTag) {
+    return;
+  }
 
-    const updatedTags = [...tags, cleanedTag].sort((a, b) =>
+  const tagAlreadyExists = tags.some(
+    (tag) => tag.toLowerCase() === cleanedTag.toLowerCase()
+  );
+
+  if (tagAlreadyExists) {
+    alert("Diesen Tag gibt es bereits.");
+    return;
+  }
+
+  const { error } = await supabase
+    .from("tags")
+    .insert({
+      name: cleanedTag,
+    });
+
+  if (error) {
+    console.error("Tag konnte nicht gespeichert werden:", error);
+    alert("Der Tag konnte nicht gespeichert werden.");
+    return;
+  }
+
+  setTags((currentTags) =>
+    [...currentTags, cleanedTag].sort((a, b) =>
       a.localeCompare(b, "de")
-    );
+    )
+  );
 
-    saveTags(updatedTags);
-    setNewTag("");
+  setNewTag("");
+}
+
+  async function deleteTag(tagToDelete: string) {
+  const confirmed = window.confirm(
+    `Möchtest du den Tag „${tagToDelete}“ wirklich löschen?`
+  );
+
+  if (!confirmed) {
+    return;
   }
 
-  function deleteTag(tagToDelete: string) {
-    const confirmed = window.confirm(
-      `Möchtest du den Tag „${tagToDelete}“ wirklich löschen?`
+  const { error: recipeTagsError } = await supabase
+    .from("recipe_tags")
+    .delete()
+    .eq("tag", tagToDelete);
+
+  if (recipeTagsError) {
+    console.error(
+      "Tag-Zuordnungen konnten nicht gelöscht werden:",
+      recipeTagsError
     );
-
-    if (!confirmed) {
-      return;
-    }
-
-    const updatedTags = tags.filter(
-      (tag) => tag !== tagToDelete
-    );
-
-    saveTags(updatedTags);
+    alert("Der Tag konnte nicht gelöscht werden.");
+    return;
   }
+
+  const { error: tagError } = await supabase
+    .from("tags")
+    .delete()
+    .eq("name", tagToDelete);
+
+  if (tagError) {
+    console.error("Tag konnte nicht gelöscht werden:", tagError);
+    alert("Der Tag konnte nicht gelöscht werden.");
+    return;
+  }
+
+  setTags((currentTags) =>
+    currentTags.filter((tag) => tag !== tagToDelete)
+  );
+}
 
   return (
     <main className="min-h-screen bg-stone-100 px-5 py-8">
