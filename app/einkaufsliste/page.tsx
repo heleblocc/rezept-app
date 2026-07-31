@@ -225,13 +225,27 @@ async function toggleGroup(group: GroupedShoppingItem) {
   }
 }
 
-  function deleteGroup(group: GroupedShoppingItem) {
-    const updatedItems = items.filter(
-      (item) => !group.ids.includes(item.id)
-    );
+async function deleteGroup(group: GroupedShoppingItem) {
+  try {
+    const { error } = await supabase
+      .from("shopping_list")
+      .delete()
+      .in("id", group.ids);
 
-    saveItems(updatedItems);
+    if (error) {
+      throw error;
+    }
+
+    setItems((currentItems) =>
+      currentItems.filter(
+        (item) => !group.ids.includes(item.id)
+      )
+    );
+  } catch (error) {
+    console.error("Artikel konnte nicht gelöscht werden:", error);
+    alert("Der Artikel konnte nicht gelöscht werden.");
   }
+}
 
   function clearCheckedItems() {
     const updatedItems = items.filter((item) => !item.checked);
