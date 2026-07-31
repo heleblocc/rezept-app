@@ -248,7 +248,20 @@ function ingredientMatches(
     ingredient.includes(pantry)
   );
 }
+function shuffleArray<T>(items: T[]) {
+  const shuffled = [...items];
 
+  for (let index = shuffled.length - 1; index > 0; index--) {
+    const randomIndex = Math.floor(Math.random() * (index + 1));
+
+    [shuffled[index], shuffled[randomIndex]] = [
+      shuffled[randomIndex],
+      shuffled[index],
+    ];
+  }
+
+  return shuffled;
+}
 export default function InspirationPage() {
   const [selectedTag, setSelectedTag] = useState("Alle");
   const [search, setSearch] = useState("");
@@ -256,6 +269,7 @@ export default function InspirationPage() {
   const [showPantryMatches, setShowPantryMatches] =
     useState(false);
   const [loaded, setLoaded] = useState(false);
+  const [shuffleSeed, setShuffleSeed] = useState(0);
 
   useEffect(() => {
     const savedPantry = localStorage.getItem("pantry-items");
@@ -332,38 +346,41 @@ export default function InspirationPage() {
       });
   }, [pantryItems]);
 
-  const filteredMatches = useMemo(() => {
-    const normalizedSearch = normalizeText(search);
+const filteredMatches = useMemo(() => {
+  const normalizedSearch = normalizeText(search);
 
-    return inspirationMatches.filter((match) => {
-      const matchesTag =
-        selectedTag === "Alle" ||
-        match.idea.tags.includes(selectedTag);
+  const matches = inspirationMatches.filter((match) => {
+    const matchesTag =
+      selectedTag === "Alle" ||
+      match.idea.tags.includes(selectedTag);
 
-      const matchesSearch =
-        normalizeText(match.idea.title).includes(
-          normalizedSearch
-        ) ||
-        normalizeText(match.idea.description).includes(
-          normalizedSearch
-        );
-
-      const matchesPantry =
-        !showPantryMatches ||
-        match.availableIngredients.length > 0;
-
-      return (
-        matchesTag &&
-        matchesSearch &&
-        matchesPantry
+    const matchesSearch =
+      normalizeText(match.idea.title).includes(
+        normalizedSearch
+      ) ||
+      normalizeText(match.idea.description).includes(
+        normalizedSearch
       );
-    });
-  }, [
-    inspirationMatches,
-    selectedTag,
-    search,
-    showPantryMatches,
-  ]);
+
+    const matchesPantry =
+      !showPantryMatches ||
+      match.availableIngredients.length > 0;
+
+    return (
+      matchesTag &&
+      matchesSearch &&
+      matchesPantry
+    );
+  });
+
+  return shuffleArray(matches);
+}, [
+  inspirationMatches,
+  selectedTag,
+  search,
+  showPantryMatches,
+  shuffleSeed,
+]);
 
   const ideaOfTheDay = useMemo(() => {
     const today = new Date();
@@ -539,15 +556,27 @@ export default function InspirationPage() {
         </section>
 
         <section className="mt-8">
-          <div className="flex items-center justify-between gap-4">
-            <h2 className="text-2xl font-bold text-stone-900">
-              Rezeptideen
-            </h2>
+         <div className="flex flex-wrap items-center justify-between gap-4">
+  <h2 className="text-2xl font-bold text-stone-900">
+    Rezeptideen
+  </h2>
 
-            <span className="text-sm text-stone-500">
-              {filteredMatches.length} Ideen
-            </span>
-          </div>
+  <div className="flex items-center gap-3">
+    <span className="text-sm text-stone-500">
+      {filteredMatches.length} Ideen
+    </span>
+
+    <button
+      type="button"
+      onClick={() =>
+        setShuffleSeed((current) => current + 1)
+      }
+      className="rounded-xl bg-stone-200 px-4 py-2 text-sm font-medium text-stone-800 transition hover:bg-stone-300"
+    >
+      Neue Vorschläge
+    </button>
+  </div>
+</div>
 
           {filteredMatches.length === 0 ? (
             <div className="mt-5 rounded-2xl bg-white p-6 shadow-sm">

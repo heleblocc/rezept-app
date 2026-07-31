@@ -3,7 +3,10 @@
 import { createWorker } from "tesseract.js";
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
-import { useRouter } from "next/navigation";
+import {
+  useRouter,
+  useSearchParams,
+} from "next/navigation";
 import { getRecipes } from "@/lib/recipes";
 import { supabase } from "@/lib/supabase";
 
@@ -58,9 +61,13 @@ const texts = {
 
 export default function Home() {
   const router = useRouter();
+    const searchParams = useSearchParams();
+    
   const [recipes, setRecipes] = useState<Recipe[]>([]);
   const [search, setSearch] = useState("");
-  const [selectedTag, setSelectedTag] = useState("");
+  const [selectedTag, setSelectedTag] = useState(
+  searchParams.get("tag") ?? ""
+);
   const [showFavoritesOnly, setShowFavoritesOnly] = useState(false);
   const [language, setLanguage] = useState<"de" | "en">("de");
 
@@ -196,7 +203,25 @@ async function setRating(id: number, rating: number) {
   }
 }
 
+function selectTag(tag: string) {
+  setSelectedTag(tag);
 
+  const params = new URLSearchParams(
+    searchParams.toString()
+  );
+
+  if (tag) {
+    params.set("tag", tag);
+  } else {
+    params.delete("tag");
+  }
+
+  const query = params.toString();
+
+  router.replace(query ? `/?${query}` : "/", {
+    scroll: false,
+  });
+}
 
   return (
     <>
@@ -240,7 +265,7 @@ async function setRating(id: number, rating: number) {
               <div className="flex gap-2 overflow-x-auto pb-1">
                 <button
                   type="button"
-                  onClick={() => setSelectedTag("")}
+                  onClick={() => selectTag("")}
                   className={`shrink-0 rounded-full px-4 py-2 text-sm ${
                     selectedTag === ""
                       ? "bg-green-700 text-white"
@@ -254,7 +279,7 @@ async function setRating(id: number, rating: number) {
                   <button
                     key={tag}
                     type="button"
-                    onClick={() => setSelectedTag(tag)}
+                    onClick={() => selectTag(tag)}
                     className={`shrink-0 rounded-full px-4 py-2 text-sm ${
                       selectedTag === tag
                         ? "bg-green-700 text-white"
@@ -277,7 +302,13 @@ async function setRating(id: number, rating: number) {
               {filteredRecipes.map((recipe) => (
                 <article
   key={recipe.id}
-  onClick={() => router.push(`/rezepte/${recipe.id}`)}
+  onClick={() =>
+  router.push(
+    selectedTag
+      ? `/rezepte/${recipe.id}?tag=${encodeURIComponent(selectedTag)}`
+      : `/rezepte/${recipe.id}`
+  )
+}
   className="flex min-w-0 cursor-pointer flex-col overflow-hidden rounded-2xl bg-white shadow-sm transition hover:-translate-y-0.5 hover:shadow-md"
 >
                   

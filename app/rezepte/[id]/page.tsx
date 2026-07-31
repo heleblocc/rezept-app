@@ -2,7 +2,11 @@
 
 import { supabase } from "@/lib/supabase";
 import Link from "next/link";
-import { useParams, useRouter } from "next/navigation";
+import {
+  useParams,
+  useRouter,
+  useSearchParams,
+} from "next/navigation";
 import { useEffect, useState } from "react";
 
 
@@ -37,6 +41,7 @@ type ShoppingItem = {
 export default function RecipePage() {
   const params = useParams();
     const router = useRouter();
+    const searchParams = useSearchParams();
 
   const [recipe, setRecipe] = useState<Recipe | null>(null);
   const [loaded, setLoaded] = useState(false);
@@ -274,16 +279,20 @@ async function deleteRecipe() {
       </main>
     );
   }
+const selectedTag = searchParams.get("tag");
 
+const backHref = selectedTag
+  ? `/?tag=${encodeURIComponent(selectedTag)}`
+  : "/";
   return (
     <main className="min-h-screen bg-stone-100 px-4 py-6 pb-24 sm:px-6 sm:py-8">
       <div className="mx-auto max-w-3xl">
         <Link
-          href="/"
-          className="mb-6 inline-block text-green-700 hover:underline"
-        >
-          ← Zurück zur Übersicht
-        </Link>
+  href={backHref}
+  className="mb-6 inline-block text-green-700 hover:underline"
+>
+  ← Zurück zur Übersicht
+</Link>
 
         <article className="overflow-hidden rounded-2xl bg-white shadow-sm">
           <div className="relative">
