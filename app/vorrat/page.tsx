@@ -1,5 +1,6 @@
 "use client";
 
+
 import Link from "next/link";
 import {
   FormEvent,
@@ -7,6 +8,7 @@ import {
   useMemo,
   useState,
 } from "react";
+import { getRecipes } from "@/lib/recipes";
 
 type PantryItem = {
   id: string;
@@ -113,8 +115,8 @@ export default function VorratPage() {
   const [loaded, setLoaded] = useState(false);
 
   useEffect(() => {
+  async function loadData() {
     const savedItems = localStorage.getItem("pantry-items");
-    const savedRecipes = localStorage.getItem("recipes");
 
     if (savedItems) {
       try {
@@ -127,25 +129,30 @@ export default function VorratPage() {
       }
     }
 
-    if (savedRecipes) {
-      try {
-        const parsedRecipes: Recipe[] =
-          JSON.parse(savedRecipes);
+    try {
+      const loadedRecipes = await getRecipes();
 
-        const validRecipes = parsedRecipes.filter(
-          (recipe) =>
-            recipe &&
-            Array.isArray(recipe.ingredients)
-        );
+      const validRecipes = loadedRecipes.filter(
+        (recipe) =>
+          recipe &&
+          Array.isArray(recipe.ingredients)
+      );
 
-        setRecipes(validRecipes);
-      } catch {
-        setRecipes([]);
-      }
+      setRecipes(validRecipes);
+    } catch (error) {
+      console.error(
+        "Rezepte konnten nicht geladen werden:",
+        error
+      );
+
+      setRecipes([]);
     }
 
     setLoaded(true);
-  }, []);
+  }
+
+  loadData();
+}, []);
 
   const filteredItems = useMemo(() => {
     const normalizedSearch = normalizeText(search);
