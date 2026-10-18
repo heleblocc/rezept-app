@@ -898,13 +898,7 @@ function HomeContent() {
       </main>
 
       {/* Neues Rezept */}
-      <Link
-        href="/rezepte/neu"
-        className="fixed bottom-24 right-5 z-30 flex h-14 w-14 items-center justify-center rounded-full bg-[#526655] text-3xl font-light text-white shadow-xl transition hover:scale-105 hover:bg-[#3D5041] active:scale-95 md:bottom-6 md:right-6 md:h-16 md:w-16"
-        aria-label={t.newRecipe}
-      >
-        +
-      </Link>
+      
     </>
   );
 }
