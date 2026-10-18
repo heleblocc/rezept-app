@@ -353,7 +353,7 @@ export default function Navigation() {
   return (
     <>
       {/* OBERE NAVIGATIONSLEISTE */}
-      <header className="fixed inset-x-0 top-0 z-40 border-b border-[#E8E5DF] bg-[#F6F4F0]/95 backdrop-blur-md">
+      <header className="sticky top-0 z-40 border-b border-[#E8E5DF] bg-[#F6F4F0]/95 backdrop-blur-md">
         <div className="relative mx-auto flex h-14 max-w-7xl items-center justify-between px-4 sm:px-6">
 
           {/* Menü links */}
