@@ -1,26 +1,290 @@
+
 @import "tailwindcss";
 
+/* ========================================
+   FARBEN & DESIGN
+======================================== */
+
+
+
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  --background: #f6f4f0;
+  --foreground: #292b29;
+
+  --cream: #f6f4f0;
+  --sand: #ebe8e2;
+  --forest: #526655;
+  --forest-dark: #3d5041;
+  --sage: #b4c0b2;
+  --muted: #858780;
+  --card: #ffffff;
+  --border-soft: #e8e5df;
+
+  --radius-card: 16px;
 }
+
+
+
+/* ========================================
+   TAILWIND THEME
+======================================== */
 
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+
+  --color-cream: var(--cream);
+  --color-sand: var(--sand);
+  --color-forest: var(--forest);
+  --color-sage: var(--sage);
+  --color-card: var(--card);
+
+  --font-sans: var(--font-dm-sans), Arial, sans-serif;
+  --font-serif: var(--font-playfair), Georgia, serif;
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+/* ========================================
+   GRUNDLAYOUT
+======================================== */
+
+html {
+  scroll-behavior: smooth;
 }
 
 body {
+  margin: 0;
+  min-height: 100vh;
   background: var(--background);
   color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  font-family: var(--font-dm-sans), Arial, sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+/* ========================================
+   TYPOGRAFIE
+======================================== */
+
+h1,
+h2,
+h3 {
+  letter-spacing: -0.025em;
+}
+
+.font-elegant {
+  font-family: var(--font-playfair), Georgia, serif;
+}
+
+.text-muted {
+  color: var(--muted);
+}
+
+/* ========================================
+   BUTTONS
+======================================== */
+
+button {
+  cursor: pointer;
+  transition:
+    background-color 0.2s ease,
+    color 0.2s ease,
+    transform 0.2s ease;
+}
+
+button:active {
+  transform: scale(0.98);
+}
+
+.app-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+
+  background: var(--forest);
+  color: white;
+
+  border: none;
+  border-radius: 999px;
+
+  padding: 12px 20px;
+  font-size: 14px;
+  font-weight: 600;
+
+  transition: background-color 0.2s ease;
+}
+
+.app-button:hover {
+  background: var(--forest-dark);
+}
+
+/* ========================================
+   EINGABEFELDER
+======================================== */
+
+input,
+textarea,
+select {
+  font-family: inherit;
+}
+
+input:focus-visible,
+textarea:focus-visible,
+select:focus-visible,
+button:focus-visible,
+a:focus-visible {
+  outline: 2px solid var(--forest);
+  outline-offset: 2px;
+}
+
+.app-input {
+  width: 100%;
+  background: var(--card);
+  border: 1px solid var(--border-soft);
+  border-radius: 14px;
+  padding: 12px 16px;
+  color: var(--foreground);
+}
+
+.app-input::placeholder {
+  color: var(--muted);
+}
+
+/* ========================================
+   KARTEN
+======================================== */
+
+.app-card {
+  background: var(--card);
+  border: 1px solid var(--border-soft);
+  border-radius: var(--radius-card);
+  overflow: hidden;
+
+  box-shadow: 0 3px 12px rgb(41 43 37 / 5%);
+
+  transition:
+    transform 0.2s ease,
+    box-shadow 0.2s ease;
+}
+
+@media (hover: hover) {
+  .app-card:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 8px 22px rgb(41 43 37 / 9%);
+  }
+}
+
+/* ========================================
+   KOMPAKTE REZEPTKARTEN
+======================================== */
+
+.recipe-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.recipe-card-image {
+  display: block;
+  width: 100%;
+  aspect-ratio: 1 / 1;
+  object-fit: cover;
+}
+
+.recipe-card-content {
+  padding: 10px 12px;
+}
+
+.recipe-card-title {
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 1.35;
+  color: var(--foreground);
+}
+
+.recipe-card-meta {
+  font-size: 11px;
+  color: var(--muted);
+  margin-top: 5px;
+}
+
+/* ========================================
+   RESPONSIVE REZEPTÜBERSICHT
+======================================== */
+
+@media (min-width: 640px) {
+  .recipe-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 16px;
+  }
+}
+
+@media (min-width: 1024px) {
+  .recipe-grid {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 18px;
+  }
+}
+
+@media (min-width: 1280px) {
+  .recipe-grid {
+    grid-template-columns: repeat(5, minmax(0, 1fr));
+  }
+}
+
+/* ========================================
+   MOBILE OPTIMIERUNG
+======================================== */
+
+@media (max-width: 639px) {
+  .app-card {
+    border-radius: 14px;
+  }
+
+  .recipe-card-content {
+    padding: 9px 10px;
+  }
+
+  .recipe-card-title {
+    font-size: 13px;
+  }
+
+  .recipe-grid {
+    gap: 10px;
+  }
+}
+
+/* ========================================
+   SCROLLLEISTEN
+======================================== */
+
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #c9c8bd;
+  border-radius: 10px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+/* ========================================
+   BEWEGUNGSREDUKTION
+======================================== */
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    scroll-behavior: auto !important;
+    transition-duration: 0.01ms !important;
+    animation-duration: 0.01ms !important;
+  }
 }

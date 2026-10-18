@@ -1,21 +1,24 @@
+
 import type { Metadata } from "next";
-import { Geist, Geist_Mono } from "next/font/google";
+import { DM_Sans, Playfair_Display } from "next/font/google";
 import "./globals.css";
 import Navigation from "./components/Navigation";
 
-const geistSans = Geist({
-  variable: "--font-geist-sans",
+const dmSans = DM_Sans({
   subsets: ["latin"],
+  variable: "--font-dm-sans",
+  display: "swap",
 });
 
-const geistMono = Geist_Mono({
-  variable: "--font-geist-mono",
+const playfair = Playfair_Display({
   subsets: ["latin"],
+  variable: "--font-playfair",
+  display: "swap",
 });
 
 export const metadata: Metadata = {
-  title: "HB Rezepte",
-  description: "Persönliche Rezeptsammlung",
+  title: "Das Schmausarchiv",
+  description: "Mahlzeit, Majestät!",
 };
 
 export default function RootLayout({
@@ -26,11 +29,11 @@ export default function RootLayout({
   return (
     <html
       lang="de"
-      className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
+      className={`${dmSans.variable} ${playfair.variable}`}
     >
-      <body className="min-h-full bg-stone-100">
+      <body className="min-h-screen bg-[#F7F3EC] text-[#292B25] antialiased">
         <Navigation />
-        {children}
+{children}
       </body>
     </html>
   );

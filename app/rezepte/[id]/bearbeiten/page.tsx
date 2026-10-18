@@ -1,7 +1,14 @@
+
 "use client";
+
 import { supabase } from "@/lib/supabase";
 import Link from "next/link";
-import { FormEvent, useEffect, useState } from "react";
+import {
+  useEffect,
+  useState,
+  type ChangeEvent,
+  type FormEvent,
+} from "react";
 import { useParams, useRouter } from "next/navigation";
 
 type Ingredient = {
@@ -22,356 +29,439 @@ type Recipe = {
   image?: string;
 };
 
+const emptyIngredient = (): Ingredient => ({
+  amount: "",
+  unit: "",
+  name: "",
+});
+
+const inputClass =
+  "w-full min-w-0 rounded-xl border border-[#E8E5DF] bg-white px-3 py-3 text-[#292B29] outline-none transition focus:border-[#526655] focus:ring-2 focus:ring-[#E5EAE3]";
+
 export default function RezeptBearbeiten() {
   const params = useParams<{ id: string }>();
   const router = useRouter();
 
-   const [title, setTitle] = useState("");
+  const [title, setTitle] = useState("");
   const [cookingTime, setCookingTime] = useState("");
   const [instructions, setInstructions] = useState("");
+
   const [availableTags, setAvailableTags] = useState<string[]>([]);
   const [selectedTags, setSelectedTags] = useState<string[]>([]);
   const [ingredients, setIngredients] = useState<Ingredient[]>([]);
+
   const [loaded, setLoaded] = useState(false);
   const [recipeFound, setRecipeFound] = useState(false);
-const [image, setImage] = useState<File | null>(null);
-const [imagePreview, setImagePreview] = useState("");
-const [oldImageUrl, setOldImageUrl] = useState("");
+  const [isSaving, setIsSaving] = useState(false);
 
- useEffect(() => {
-  async function loadRecipe() {
-    const recipeId = Number(params.id);
+  const [image, setImage] = useState<File | null>(null);
+  const [imagePreview, setImagePreview] = useState("");
+  const [oldImageUrl, setOldImageUrl] = useState("");
 
-    if (!Number.isFinite(recipeId)) {
-      setLoaded(true);
-      return;
-    }
+  // VORHANDENES REZEPT LADEN
+  useEffect(() => {
+    let cancelled = false;
 
-    try {
-      const { data: recipe, error } = await supabase
-        .from("recipes")
-        .select(`
-          id,
-          title,
-          instructions,
-          cooking_time,
-          image,
-          recipe_ingredients (
-            amount,
-            unit,
-            name
-          ),
-          recipe_tags (
-            tag
-          )
-        `)
-        .eq("id", recipeId)
-        .single();
-
-      if (error) throw error;
-
-     const { data: managedTags, error: managedTagsError } =
-  await supabase
-    .from("tags")
-    .select("name")
-    .order("name");
-
-if (managedTagsError) {
-  console.error(
-    "Tags aus der Tags-Tabelle konnten nicht geladen werden:",
-    managedTagsError
-  );
-}
-
-const { data: usedTags, error: usedTagsError } =
-  await supabase
-    .from("recipe_tags")
-    .select("tag")
-    .order("tag");
-
-if (usedTagsError) {
-  console.error(
-    "Verwendete Rezept-Tags konnten nicht geladen werden:",
-    usedTagsError
-  );
-}
-
-const currentRecipeTags = [
-  ...new Set(
-    (recipe.recipe_tags ?? [])
-      .map((item) => item.tag)
-      .filter(Boolean)
-  ),
-];
-
-const allAvailableTags = [
-  ...new Set([
-    ...(managedTags ?? [])
-      .map((item) => item.name)
-      .filter(Boolean),
-
-    ...(usedTags ?? [])
-      .map((item) => item.tag)
-      .filter(Boolean),
-
-    ...currentRecipeTags,
-  ]),
-].sort((a, b) => a.localeCompare(b, "de"));
-
-setAvailableTags(allAvailableTags);
-setSelectedTags(currentRecipeTags);
-
-setTitle(recipe.title);
-setCookingTime(
-  recipe.cooking_time ? String(recipe.cooking_time) : ""
-);
-
-setInstructions(recipe.instructions ?? "");
-setImagePreview(recipe.image ?? "");
-setOldImageUrl(recipe.image ?? "");
-      setIngredients(
-        recipe.recipe_ingredients.length > 0
-          ? recipe.recipe_ingredients
-          : [{ amount: "", unit: "", name: "" }]
-      );
-
-      setRecipeFound(true);
-    } catch (error) {
-      console.error(error);
+    async function loadRecipe() {
+      setLoaded(false);
       setRecipeFound(false);
+
+      const recipeId = Number(params.id);
+
+      if (!Number.isFinite(recipeId) || recipeId <= 0) {
+        setLoaded(true);
+        return;
+      }
+
+      try {
+        const { data: recipe, error } = await supabase
+          .from("recipes")
+          .select(`
+            id,
+            title,
+            instructions,
+            cooking_time,
+            image,
+            recipe_ingredients (
+              amount,
+              unit,
+              name
+            ),
+            recipe_tags (
+              tag
+            )
+          `)
+          .eq("id", recipeId)
+          .single();
+
+        if (error || !recipe) {
+          throw error ?? new Error("Rezept nicht gefunden.");
+        }
+
+        const { data: managedTags, error: managedTagsError } =
+          await supabase
+            .from("tags")
+            .select("name")
+            .order("name");
+
+        if (managedTagsError) {
+          console.error(
+            "Tags konnten nicht geladen werden:",
+            managedTagsError
+          );
+        }
+
+        const { data: usedTags, error: usedTagsError } =
+          await supabase
+            .from("recipe_tags")
+            .select("tag")
+            .order("tag");
+
+        if (usedTagsError) {
+          console.error(
+            "Verwendete Tags konnten nicht geladen werden:",
+            usedTagsError
+          );
+        }
+
+        const currentRecipeTags = [
+          ...new Set(
+            (recipe.recipe_tags ?? [])
+              .map((item) => item.tag)
+              .filter(Boolean)
+          ),
+        ];
+
+        const allAvailableTags = [
+          ...new Set([
+            ...(managedTags ?? [])
+              .map((item) => item.name)
+              .filter(Boolean),
+
+            ...(usedTags ?? [])
+              .map((item) => item.tag)
+              .filter(Boolean),
+
+            ...currentRecipeTags,
+          ]),
+        ].sort((a, b) => a.localeCompare(b, "de"));
+
+        if (cancelled) return;
+
+        setAvailableTags(allAvailableTags);
+        setSelectedTags(currentRecipeTags);
+
+        setTitle(recipe.title ?? "");
+        setCookingTime(
+          recipe.cooking_time
+            ? String(recipe.cooking_time)
+            : ""
+        );
+        setInstructions(recipe.instructions ?? "");
+
+        setImage(null);
+        setImagePreview(recipe.image ?? "");
+        setOldImageUrl(recipe.image ?? "");
+
+        const loadedIngredients: Ingredient[] =
+          (recipe.recipe_ingredients ?? []).map((ingredient) => ({
+            amount: String(ingredient.amount ?? ""),
+            unit: ingredient.unit ?? "",
+            name: ingredient.name ?? "",
+          }));
+
+        setIngredients(
+          loadedIngredients.length > 0
+            ? loadedIngredients
+            : [emptyIngredient()]
+        );
+
+        setRecipeFound(true);
+      } catch (error) {
+        console.error("Fehler beim Laden des Rezepts:", error);
+
+        if (!cancelled) {
+          setRecipeFound(false);
+        }
+      } finally {
+        if (!cancelled) {
+          setLoaded(true);
+        }
+      }
     }
 
-    setLoaded(true);
-  }
+    loadRecipe();
 
-  loadRecipe();
-}, [params.id]);
+    return () => {
+      cancelled = true;
+    };
+  }, [params.id]);
 
+  // ZUTATEN BEARBEITEN
   function updateIngredient(
     index: number,
     field: keyof Ingredient,
     value: string
   ) {
-    const updatedIngredients = [...ingredients];
-
-    updatedIngredients[index] = {
-      ...updatedIngredients[index],
-      [field]: value,
-    };
-
-    setIngredients(updatedIngredients);
-  }
-
-  function addIngredient() {
-    setIngredients([
-      ...ingredients,
-      {
-        amount: "",
-        unit: "",
-        name: "",
-      },
-    ]);
-  }
-  function toggleTag(tag: string) {
-  if (selectedTags.includes(tag)) {
-    setSelectedTags(
-      selectedTags.filter((selectedTag) => selectedTag !== tag)
-    );
-  } else {
-    setSelectedTags([...selectedTags, tag]);
-  }
-}
-function handleImageChange(
-  event: React.ChangeEvent<HTMLInputElement>
-) {
-  const file = event.target.files?.[0];
-
-  if (!file) return;
-
-  if (!file.type.startsWith("image/")) {
-    alert("Bitte wähle ein Bild aus.");
-    return;
-  }
-
-  if (file.size > 5 * 1024 * 1024) {
-    alert("Das Bild darf maximal 5 MB groß sein.");
-    return;
-  }
-
-  setImage(file);
-  setImagePreview(URL.createObjectURL(file));
-}
-  function removeIngredient(index: number) {
-    if (ingredients.length === 1) {
-      return;
-    }
-
-    setIngredients(
-      ingredients.filter(
-        (_, ingredientIndex) => ingredientIndex !== index
+    setIngredients((current) =>
+      current.map((ingredient, ingredientIndex) =>
+        ingredientIndex === index
+          ? { ...ingredient, [field]: value }
+          : ingredient
       )
     );
   }
 
-async function handleSubmit(event: FormEvent<HTMLFormElement>) {
-  event.preventDefault();
-
-  if (!title.trim()) {
-    alert("Bitte gib einen Rezeptnamen ein.");
-    return;
+  // NEUE ZUTAT ANS ENDE ANHÄNGEN
+  function addIngredient() {
+    setIngredients((current) => [
+      ...current,
+      emptyIngredient(),
+    ]);
   }
 
-  const cleanedIngredients = ingredients
-  .filter((ingredient) => (ingredient.name ?? "").trim() !== "")
-  .map((ingredient) => ({
-    amount: (ingredient.amount ?? "").trim(),
-    unit: (ingredient.unit ?? "").trim(),
-    name: (ingredient.name ?? "").trim(),
-  }));
+  // ZUTAT ENTFERNEN
+  function removeIngredient(index: number) {
+    setIngredients((current) =>
+      current.length <= 1
+        ? current
+        : current.filter(
+            (_, ingredientIndex) => ingredientIndex !== index
+          )
+    );
+  }
 
-  const parsedCookingTime =
-    cookingTime.trim() === "" ? null : Number(cookingTime);
+  // TAG AUSWÄHLEN
+  function toggleTag(tag: string) {
+    setSelectedTags((current) =>
+      current.includes(tag)
+        ? current.filter((selectedTag) => selectedTag !== tag)
+        : [...current, tag]
+    );
+  }
 
-  if (
-    parsedCookingTime !== null &&
-    (!Number.isFinite(parsedCookingTime) || parsedCookingTime <= 0)
+  // NEUES REZEPTBILD AUSWÄHLEN
+  function handleImageChange(
+    event: ChangeEvent<HTMLInputElement>
   ) {
-    alert("Bitte gib eine gültige Kochzeit ein.");
-    return;
+    const file = event.target.files?.[0];
+
+    if (!file) return;
+
+    if (!file.type.startsWith("image/")) {
+      alert("Bitte wähle ein Bild aus.");
+      return;
+    }
+
+    if (file.size > 5 * 1024 * 1024) {
+      alert("Das Bild darf maximal 5 MB groß sein.");
+      return;
+    }
+
+    setImage(file);
+    setImagePreview(URL.createObjectURL(file));
   }
 
-  if (cleanedIngredients.length === 0) {
-    alert("Bitte gib mindestens eine Zutat ein.");
-    return;
-  }
+  // ÄNDERUNGEN SPEICHERN
+  async function handleSubmit(
+    event: FormEvent<HTMLFormElement>
+  ) {
+    event.preventDefault();
 
-  const recipeId = Number(params.id);
+    if (isSaving) return;
 
-  if (!Number.isFinite(recipeId)) {
-    alert("Ungültige Rezept-ID.");
-    return;
-  }
+    if (!title.trim()) {
+      alert("Bitte gib einen Rezeptnamen ein.");
+      return;
+    }
 
-  try {
-    let imageUrl = oldImageUrl;
+    const cleanedIngredients = ingredients
+      .filter(
+        (ingredient) => (ingredient.name ?? "").trim() !== ""
+      )
+      .map((ingredient) => ({
+        amount: (ingredient.amount ?? "").trim(),
+        unit: (ingredient.unit ?? "").trim(),
+        name: (ingredient.name ?? "").trim(),
+      }));
 
-    if (image) {
-      const fileExtension =
-        image.name.split(".").pop()?.toLowerCase() || "jpg";
+    if (cleanedIngredients.length === 0) {
+      alert("Bitte gib mindestens eine Zutat ein.");
+      return;
+    }
 
-      const safeFileName = `${Date.now()}-${crypto.randomUUID()}.${fileExtension}`;
-      const filePath = `recipes/${safeFileName}`;
+    const parsedCookingTime =
+      cookingTime.trim() === ""
+        ? null
+        : Number(cookingTime);
 
-      const { error: uploadError } = await supabase.storage
-        .from("recipe-images")
-        .upload(filePath, image, {
-          cacheControl: "3600",
-          upsert: false,
-          contentType: image.type,
-        });
+    if (
+      parsedCookingTime !== null &&
+      (!Number.isFinite(parsedCookingTime) ||
+        parsedCookingTime <= 0)
+    ) {
+      alert("Bitte gib eine gültige Kochzeit ein.");
+      return;
+    }
 
-      if (uploadError) {
-        alert(`Bild konnte nicht hochgeladen werden: ${uploadError.message}`);
-        return;
+    const recipeId = Number(params.id);
+
+    if (!Number.isFinite(recipeId) || recipeId <= 0) {
+      alert("Ungültige Rezept-ID.");
+      return;
+    }
+
+    setIsSaving(true);
+
+    try {
+      let imageUrl = oldImageUrl;
+
+      // NEUES BILD HOCHLADEN
+      if (image) {
+        const fileExtension =
+          image.name.split(".").pop()?.toLowerCase() || "jpg";
+
+        const safeFileName =
+          `${Date.now()}-${crypto.randomUUID()}.${fileExtension}`;
+
+        const filePath = `recipes/${safeFileName}`;
+
+        const { error: uploadError } =
+          await supabase.storage
+            .from("recipe-images")
+            .upload(filePath, image, {
+              cacheControl: "3600",
+              upsert: false,
+              contentType: image.type,
+            });
+
+        if (uploadError) {
+          throw new Error(
+            `Bild konnte nicht hochgeladen werden: ${uploadError.message}`
+          );
+        }
+
+        const { data } = supabase.storage
+          .from("recipe-images")
+          .getPublicUrl(filePath);
+
+        imageUrl = data.publicUrl;
       }
 
-      const { data } = supabase.storage
-        .from("recipe-images")
-        .getPublicUrl(filePath);
+      // REZEPT AKTUALISIEREN
+      const { error: recipeError } = await supabase
+        .from("recipes")
+        .update({
+          title: title.trim(),
+          instructions: instructions.trim(),
+          cooking_time: parsedCookingTime,
+          image: imageUrl || null,
+          updated_at: new Date().toISOString(),
+        })
+        .eq("id", recipeId);
 
-      imageUrl = data.publicUrl;
-    }
+      if (recipeError) {
+        throw recipeError;
+      }
 
-    const { error: recipeError } = await supabase
-      .from("recipes")
-      .update({
-        title: title.trim(),
-        instructions: instructions.trim(),
-        cooking_time: parsedCookingTime,
-        image: imageUrl || null,
-        updated_at: new Date().toISOString(),
-      })
-      .eq("id", recipeId);
+      // ALTE ZUTATEN ENTFERNEN
+      const { error: deleteIngredientsError } =
+        await supabase
+          .from("recipe_ingredients")
+          .delete()
+          .eq("recipe_id", recipeId);
 
-    if (recipeError) {
-      throw recipeError;
-    }
+      if (deleteIngredientsError) {
+        throw deleteIngredientsError;
+      }
 
-    const { error: deleteIngredientsError } = await supabase
-      .from("recipe_ingredients")
-      .delete()
-      .eq("recipe_id", recipeId);
+      // AKTUELLE ZUTATEN SPEICHERN
+      const { error: ingredientsError } =
+        await supabase
+          .from("recipe_ingredients")
+          .insert(
+            cleanedIngredients.map((ingredient) => ({
+              recipe_id: recipeId,
+              amount: ingredient.amount,
+              unit: ingredient.unit,
+              name: ingredient.name,
+            }))
+          );
 
-    if (deleteIngredientsError) {
-      throw deleteIngredientsError;
-    }
+      if (ingredientsError) {
+        throw ingredientsError;
+      }
 
-    const { error: ingredientsError } = await supabase
-      .from("recipe_ingredients")
-      .insert(
-        cleanedIngredients.map((ingredient) => ({
-          recipe_id: recipeId,
-          amount: ingredient.amount,
-          unit: ingredient.unit,
-          name: ingredient.name,
-        }))
+      // ALTE TAG-VERKNÜPFUNGEN ENTFERNEN
+      const { error: deleteTagsError } =
+        await supabase
+          .from("recipe_tags")
+          .delete()
+          .eq("recipe_id", recipeId);
+
+      if (deleteTagsError) {
+        throw deleteTagsError;
+      }
+
+      // AKTUELLE TAGS SPEICHERN
+      const uniqueSelectedTags = [...new Set(selectedTags)];
+
+      if (uniqueSelectedTags.length > 0) {
+        const { error: tagsError } =
+          await supabase
+            .from("recipe_tags")
+            .insert(
+              uniqueSelectedTags.map((tag) => ({
+                recipe_id: recipeId,
+                tag,
+              }))
+            );
+
+        if (tagsError) {
+          throw tagsError;
+        }
+      }
+
+      // ZUR REZEPTANSICHT ZURÜCK
+      router.push(`/rezepte/${recipeId}`);
+      router.refresh();
+    } catch (error) {
+      console.error(
+        "Rezept konnte nicht gespeichert werden:",
+        error
       );
 
-    if (ingredientsError) {
-      throw ingredientsError;
+      alert(
+        error instanceof Error
+          ? `Das Rezept konnte nicht gespeichert werden: ${error.message}`
+          : "Das Rezept konnte nicht gespeichert werden."
+      );
+    } finally {
+      setIsSaving(false);
     }
-
-    const { error: deleteTagsError } = await supabase
-      .from("recipe_tags")
-      .delete()
-      .eq("recipe_id", recipeId);
-
-    if (deleteTagsError) {
-      throw deleteTagsError;
-    }
-const uniqueSelectedTags = [...new Set(selectedTags)];
-    if (uniqueSelectedTags.length > 0) {
-      const { error: tagsError } = await supabase
-        .from("recipe_tags")
-        .insert(
-          uniqueSelectedTags.map((tag) => ({
-            recipe_id: recipeId,
-            tag,
-          }))
-        );
-
-      if (tagsError) {
-        throw tagsError;
-      }
-    }
-
-    router.push(`/rezepte/${recipeId}`);
-    router.refresh();
-  } catch (error) {
-    console.error("Rezept konnte nicht gespeichert werden:", error);
-    alert("Das Rezept konnte nicht gespeichert werden.");
   }
-}
 
+  // LADEANSICHT
   if (!loaded) {
     return (
-      <main className="min-h-screen bg-stone-100 p-8">
+      <main className="min-h-screen bg-[#F6F4F0] p-8 text-[#526655]">
         Rezept wird geladen...
       </main>
     );
   }
 
+  // REZEPT NICHT GEFUNDEN
   if (!recipeFound) {
     return (
-      <main className="min-h-screen bg-stone-100 px-5 py-8">
+      <main className="min-h-screen bg-[#F6F4F0] px-5 py-8">
         <div className="mx-auto max-w-3xl">
-          <h1 className="text-3xl font-bold">
+          <h1 className="text-3xl font-semibold text-[#292B29]">
             Rezept nicht gefunden
           </h1>
 
           <Link
             href="/"
-            className="mt-5 inline-block text-green-700 hover:underline"
+            className="mt-5 inline-block text-[#526655] hover:underline"
           >
             ← Zurück zur Übersicht
           </Link>
@@ -381,24 +471,28 @@ const uniqueSelectedTags = [...new Set(selectedTags)];
   }
 
   return (
-    <main className="min-h-screen bg-stone-100 px-5 py-8">
+    <main className="min-h-screen bg-[#F6F4F0] px-4 py-6 pb-28 sm:px-6 sm:py-8">
       <div className="mx-auto max-w-3xl">
+
+        {/* KOPFBEREICH */}
         <Link
           href={`/rezepte/${params.id}`}
-          className="mb-6 block text-green-700 hover:underline"
+          className="mb-5 inline-block text-sm font-medium text-[#526655] hover:underline"
         >
           ← Zurück zum Rezept
         </Link>
 
-        <h1 className="mb-8 text-4xl font-bold text-stone-900">
+        <h1 className="mb-8 text-3xl font-semibold text-[#292B29] sm:text-4xl">
           Rezept bearbeiten
         </h1>
 
         <form onSubmit={handleSubmit} className="space-y-7">
-          <div>
+
+          {/* REZEPTNAME */}
+          <section>
             <label
               htmlFor="title"
-              className="mb-2 block font-semibold text-stone-800"
+              className="mb-2 block font-semibold text-[#292B29]"
             >
               Rezeptname
             </label>
@@ -406,135 +500,172 @@ const uniqueSelectedTags = [...new Set(selectedTags)];
             <input
               id="title"
               value={title}
-              onChange={(event) => setTitle(event.target.value)}
-              className="w-full rounded-xl border border-stone-300 bg-white p-3 text-stone-900"
+              onChange={(event) =>
+                setTitle(event.target.value)
+              }
+              placeholder="Rezeptname"
+              className={inputClass}
             />
-          </div>
-          <div>
-  <label
-    htmlFor="cookingTime"
-    className="mb-2 block font-semibold text-stone-800"
-  >
-    Kochzeit
-  </label>
+          </section>
 
-  <div className="relative">
-    <input
-      id="cookingTime"
-      type="number"
-      min="1"
-      value={cookingTime}
-      onChange={(event) => setCookingTime(event.target.value)}
-      placeholder="30"
-      className="w-full rounded-xl border border-stone-300 bg-white p-3 pr-24 text-stone-900"
-    />
+          {/* KOCHZEIT */}
+          <section>
+            <label
+              htmlFor="cookingTime"
+              className="mb-2 block font-semibold text-[#292B29]"
+            >
+              Kochzeit
+            </label>
 
-    <span className="pointer-events-none absolute right-4 top-1/2 -translate-y-1/2 text-sm text-stone-500">
-      Minuten
-    </span>
-  </div>
-</div>
-<div>
-  <label
-    htmlFor="recipeImage"
-    className="mb-2 block font-semibold text-stone-800"
-  >
-    Rezeptbild
-  </label>
+            <div className="relative">
+              <input
+                id="cookingTime"
+                type="number"
+                min="1"
+                inputMode="numeric"
+                value={cookingTime}
+                onChange={(event) =>
+                  setCookingTime(event.target.value)
+                }
+                placeholder="30"
+                className={`${inputClass} pr-24`}
+              />
 
-  <input
-    id="recipeImage"
-    type="file"
-    accept="image/*"
-    onChange={handleImageChange}
-    className="mb-4"
-  />
-
-  {imagePreview && (
-    <img
-      src={imagePreview}
-      alt="Rezeptbild"
-      className="h-64 w-full rounded-xl object-cover"
-    />
-  )}
-</div>
-          <div>
-            <div className="mb-3 flex items-center justify-between">
-              <h2 className="font-semibold text-stone-800">
-                Zutaten
-              </h2>
-
-              <button
-                type="button"
-                onClick={addIngredient}
-                className="rounded-lg bg-green-100 px-3 py-2 text-sm font-medium text-green-800"
-              >
-                + Zutat
-              </button>
+              <span className="pointer-events-none absolute right-4 top-1/2 -translate-y-1/2 text-sm text-[#858780]">
+                Minuten
+              </span>
             </div>
+          </section>
 
+          {/* REZEPTBILD */}
+          <section>
+            <h2 className="mb-2 font-semibold text-[#292B29]">
+              Rezeptbild
+            </h2>
+
+            <label
+              htmlFor="recipeImage"
+              className="flex cursor-pointer flex-col items-center justify-center rounded-xl border-2 border-dashed border-[#B4C0B2] bg-white p-6 text-center transition hover:bg-[#E5EAE3]"
+            >
+              <span className="font-medium text-[#292B29]">
+                Neues Bild auswählen
+              </span>
+
+              <span className="mt-1 text-sm text-[#858780]">
+                JPG, PNG oder WebP, maximal 5 MB
+              </span>
+            </label>
+
+            <input
+              id="recipeImage"
+              type="file"
+              accept="image/jpeg,image/png,image/webp"
+              onChange={handleImageChange}
+              className="hidden"
+            />
+
+            {imagePreview && (
+              <div className="mt-4 overflow-hidden rounded-xl border border-[#E8E5DF] bg-white">
+                <img
+                  src={imagePreview}
+                  alt="Rezeptbild"
+                  className="h-64 w-full object-cover"
+                />
+              </div>
+            )}
+          </section>
+
+          {/* ZUTATEN */}
+          <section>
+            <h2 className="mb-3 font-semibold text-[#292B29]">
+              Zutaten
+            </h2>
+
+            {/* 1. ALLE VORHANDENEN ZUTATEN */}
             <div className="space-y-3">
               {ingredients.map((ingredient, index) => (
                 <div
                   key={index}
-                  className="grid grid-cols-[80px_100px_1fr_auto] gap-2"
+                  className="rounded-xl border border-[#E8E5DF] bg-white p-3 shadow-sm"
                 >
-                  <input
-                    value={ingredient.amount ?? ""}
-                    onChange={(event) =>
-                      updateIngredient(
-                        index,
-                        "amount",
-                        event.target.value
-                      )
-                    }
-                    placeholder="Menge"
-                    className="min-w-0 rounded-lg border border-stone-300 bg-white p-3 text-stone-900"
-                  />
+                  <div className="grid grid-cols-2 gap-2 sm:grid-cols-[90px_110px_1fr_auto]">
 
-                  <input
-                    value={ingredient.unit ?? ""}
-                    onChange={(event) =>
-                      updateIngredient(
-                        index,
-                        "unit",
-                        event.target.value
-                      )
-                    }
-                    placeholder="Einheit"
-                    className="min-w-0 rounded-lg border border-stone-300 bg-white p-3 text-stone-900"
-                  />
+                    {/* MENGE */}
+                    <input
+                      value={ingredient.amount ?? ""}
+                      onChange={(event) =>
+                        updateIngredient(
+                          index,
+                          "amount",
+                          event.target.value
+                        )
+                      }
+                      placeholder="Menge"
+                      aria-label={`Menge für Zutat ${index + 1}`}
+                      className={inputClass}
+                    />
 
-                  <input
-                    value={ingredient.name ?? ""}
-                    onChange={(event) =>
-                      updateIngredient(
-                        index,
-                        "name",
-                        event.target.value
-                      )
-                    }
-                    placeholder="Zutat"
-                    className="min-w-0 rounded-lg border border-stone-300 bg-white p-3 text-stone-900"
-                  />
+                    {/* EINHEIT */}
+                    <input
+                      value={ingredient.unit ?? ""}
+                      onChange={(event) =>
+                        updateIngredient(
+                          index,
+                          "unit",
+                          event.target.value
+                        )
+                      }
+                      placeholder="Einheit"
+                      aria-label={`Einheit für Zutat ${index + 1}`}
+                      className={inputClass}
+                    />
 
-                  <button
-                    type="button"
-                    onClick={() => removeIngredient(index)}
-                    className="rounded-lg bg-red-100 px-3 text-red-700"
-                    aria-label="Zutat entfernen"
-                  >
-                    ×
-                  </button>
+                    {/* ZUTATENNAME */}
+                    <input
+                      value={ingredient.name ?? ""}
+                      onChange={(event) =>
+                        updateIngredient(
+                          index,
+                          "name",
+                          event.target.value
+                        )
+                      }
+                      placeholder="Zutat"
+                      aria-label={`Name der Zutat ${index + 1}`}
+                      className={`${inputClass} col-span-2 sm:col-span-1`}
+                    />
+
+                    {/* ZUTAT ENTFERNEN */}
+                    <button
+                      type="button"
+                      onClick={() => removeIngredient(index)}
+                      disabled={ingredients.length === 1}
+                      aria-label={`Zutat ${index + 1} entfernen`}
+                      className="col-span-2 rounded-xl bg-[#F4EEEB] px-3 py-2 text-sm font-medium text-[#956B62] transition hover:bg-[#EDE2DD] disabled:cursor-not-allowed disabled:opacity-40 sm:col-span-1"
+                    >
+                      Entfernen
+                    </button>
+                  </div>
                 </div>
               ))}
             </div>
-          </div>
 
-          <div>
+            {/* 2. HINZUFÜGEN-BUTTON UNTER DER LISTE */}
+            <button
+              type="button"
+              onClick={addIngredient}
+              className="mt-4 flex w-full items-center justify-center gap-2 rounded-xl border border-dashed border-[#B4C0B2] bg-[#E5EAE3] px-4 py-3 text-sm font-medium text-[#526655] transition hover:bg-[#DCE5DA]"
+            >
+              <span className="text-xl leading-none">+</span>
+              Zutat hinzufügen
+            </button>
+          </section>
+
+          {/* 3. ZUBEREITUNG DIREKT DANACH */}
+          <section>
             <label
               htmlFor="instructions"
-              className="mb-2 block font-semibold text-stone-800"
+              className="mb-2 block font-semibold text-[#292B29]"
             >
               Zubereitung
             </label>
@@ -546,64 +677,71 @@ const uniqueSelectedTags = [...new Set(selectedTags)];
                 setInstructions(event.target.value)
               }
               rows={9}
-              className="w-full rounded-xl border border-stone-300 bg-white p-3 text-stone-900"
+              placeholder="Beschreibe die einzelnen Schritte..."
+              className={`${inputClass} resize-y`}
             />
-          </div>
+          </section>
 
-         <div>
-  <div className="mb-3 flex items-center justify-between gap-4">
-    <h2 className="font-semibold text-stone-800">
-      Tags
-    </h2>
+          {/* TAGS */}
+          <section>
+            <div className="mb-3 flex items-center justify-between gap-4">
+              <h2 className="font-semibold text-[#292B29]">
+                Tags
+              </h2>
 
-    <Link
-      href="/tags"
-      className="text-sm font-medium text-green-700 hover:underline"
-    >
-      Tags verwalten
-    </Link>
-  </div>
+              <Link
+                href="/tags"
+                className="text-sm font-medium text-[#526655] hover:underline"
+              >
+                Tags verwalten
+              </Link>
+            </div>
 
-  {availableTags.length === 0 ? (
-    <div className="rounded-xl bg-white p-4 text-stone-600">
-      Noch keine Tags vorhanden.
-      <Link
-        href="/tags"
-        className="ml-1 font-medium text-green-700 hover:underline"
-      >
-        Jetzt Tags erstellen
-      </Link>
-    </div>
-  ) : (
-    <div className="flex flex-wrap gap-2">
-      {availableTags.map((tag) => {
-        const isSelected = selectedTags.includes(tag);
+            {availableTags.length === 0 ? (
+              <div className="rounded-xl border border-[#E8E5DF] bg-white p-4 text-[#858780]">
+                Noch keine Tags vorhanden.
+                <Link
+                  href="/tags"
+                  className="ml-1 font-medium text-[#526655] hover:underline"
+                >
+                  Jetzt Tags erstellen
+                </Link>
+              </div>
+            ) : (
+              <div className="flex flex-wrap gap-2">
+                {availableTags.map((tag) => {
+                  const isSelected = selectedTags.includes(tag);
 
-        return (
-          <button
-            key={tag}
-            type="button"
-            onClick={() => toggleTag(tag)}
-            className={`rounded-full px-4 py-2 text-sm font-medium ${
-              isSelected
-                ? "bg-green-700 text-white"
-                : "bg-white text-stone-700"
-            }`}
-          >
-            {isSelected ? "✓ " : ""}
-            {tag}
-          </button>
-        );
-      })}
-    </div>
-  )}
-</div>
+                  return (
+                    <button
+                      key={tag}
+                      type="button"
+                      onClick={() => toggleTag(tag)}
+                      aria-pressed={isSelected}
+                      className={`rounded-full border px-4 py-2 text-sm font-medium transition ${
+                        isSelected
+                          ? "border-[#526655] bg-[#526655] text-white"
+                          : "border-[#E8E5DF] bg-white text-[#526655] hover:bg-[#E5EAE3]"
+                      }`}
+                    >
+                      {isSelected ? "✓ " : ""}
+                      {tag}
+                    </button>
+                  );
+                })}
+              </div>
+            )}
+          </section>
 
+          {/* ÄNDERUNGEN SPEICHERN */}
           <button
             type="submit"
-            className="w-full rounded-xl bg-green-700 px-6 py-4 font-semibold text-white"
+            disabled={isSaving}
+            className="w-full rounded-xl bg-[#526655] px-6 py-4 font-semibold text-white transition hover:bg-[#3D5041] disabled:cursor-not-allowed disabled:opacity-60"
           >
-            Änderungen speichern
+            {isSaving
+              ? "Wird gespeichert..."
+              : "Änderungen speichern"}
           </button>
         </form>
       </div>

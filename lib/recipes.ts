@@ -1,3 +1,4 @@
+
 import { supabase } from "@/lib/supabase";
 
 export type Ingredient = {
@@ -16,6 +17,10 @@ export type Recipe = {
   rating: number;
   cookingTime?: number;
   image?: string;
+
+  // Besitzer und Sichtbarkeit
+  userId: string;
+  visibility: "private" | "public";
 };
 
 type SupabaseIngredient = {
@@ -36,12 +41,19 @@ type SupabaseRecipe = {
   image: string | null;
   favorite: boolean | null;
   rating: number | null;
-  recipe_ingredients: SupabaseIngredient[];
-  recipe_tags: SupabaseTag[];
+
+  // Neue Datenbankfelder
+  user_id: string;
+  visibility: "private" | "public" | null;
+
+  recipe_ingredients: SupabaseIngredient[] | null;
+  recipe_tags: SupabaseTag[] | null;
 };
 
 export async function getRecipes(): Promise<Recipe[]> {
-  const { data, error } = await supabase
+  console.log("Lade Rezepte aus Supabase...");
+
+  const { data, error, status } = await supabase
     .from("recipes")
     .select(`
       id,
@@ -51,6 +63,8 @@ export async function getRecipes(): Promise<Recipe[]> {
       image,
       favorite,
       rating,
+      user_id,
+      visibility,
       recipe_ingredients (
         amount,
         unit,
@@ -63,11 +77,39 @@ export async function getRecipes(): Promise<Recipe[]> {
     .order("created_at", { ascending: false });
 
   if (error) {
-    console.error("Rezepte konnten nicht geladen werden:", error);
-    throw new Error(error.message);
+    console.error("Supabase-Ladefehler:", {
+      message: error.message,
+      code: error.code,
+      details: error.details,
+      status,
+    });
+
+    throw new Error(
+      `Rezepte konnten nicht geladen werden: ${error.message}`
+    );
   }
 
   const recipes = (data ?? []) as SupabaseRecipe[];
+
+  console.log("Anzahl geladener Rezepte:", recipes.length);
+
+  console.log(
+    "Zutaten-Diagnose:",
+    recipes.slice(0, 5).map((recipe) => ({
+      rezeptId: recipe.id,
+      titel: recipe.title,
+      anzahlZutaten:
+        recipe.recipe_ingredients?.length ?? 0,
+      zutaten: recipe.recipe_ingredients,
+    }))
+  );
+
+  if (recipes.length === 0) {
+    console.warn(
+      "Supabase hat keine sichtbaren Rezepte zurückgegeben. " +
+      "Bitte Datenbankzugriff und RLS-Regeln prüfen."
+    );
+  }
 
   return recipes.map((recipe) => ({
     id: recipe.id,
@@ -78,12 +120,24 @@ export async function getRecipes(): Promise<Recipe[]> {
     favorite: recipe.favorite ?? false,
     rating: recipe.rating ?? 0,
 
-    ingredients: (recipe.recipe_ingredients ?? []).map((ingredient) => ({
-      amount: ingredient.amount ?? "",
-      unit: ingredient.unit ?? "",
-      name: ingredient.name,
-    })),
+    // Besitzer und Sichtbarkeit
+    userId: recipe.user_id,
+    visibility: recipe.visibility ?? "private",
 
-    tags: (recipe.recipe_tags ?? []).map((tagEntry) => tagEntry.tag),
+    ingredients: (recipe.recipe_ingredients ?? []).map(
+      (ingredient) => ({
+        amount: ingredient.amount ?? "",
+        unit: ingredient.unit ?? "",
+        name: ingredient.name,
+      })
+    ),
+
+    tags: [
+      ...new Set(
+        (recipe.recipe_tags ?? [])
+          .map((entry) => entry.tag)
+          .filter(Boolean)
+      ),
+    ],
   }));
 }

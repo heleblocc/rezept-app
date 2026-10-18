@@ -1,12 +1,13 @@
+
 "use client";
 
 import { supabase } from "@/lib/supabase";
 import Link from "next/link";
 import {
-  FormEvent,
   useEffect,
   useMemo,
   useState,
+  type FormEvent,
 } from "react";
 
 type ShoppingItem = {
@@ -29,64 +30,88 @@ type GroupedShoppingItem = {
   checked: boolean;
 };
 
+const inputClass =
+  "w-full min-w-0 rounded-xl border border-[#E8E5DF] bg-white px-3 py-3 text-[#292B29] outline-none transition focus:border-[#526655] focus:ring-2 focus:ring-[#E5EAE3]";
+
 export default function EinkaufslistePage() {
   const [items, setItems] = useState<ShoppingItem[]>([]);
   const [loaded, setLoaded] = useState(false);
+  const [isClearing, setIsClearing] = useState(false);
 
   const [manualAmount, setManualAmount] = useState("");
-const [manualUnit, setManualUnit] = useState("");
-const [manualName, setManualName] = useState("");
+  const [manualUnit, setManualUnit] = useState("");
+  const [manualName, setManualName] = useState("");
 
-useEffect(() => {
-  async function loadShoppingList() {
-    try {
-      const { data, error } = await supabase
-        .from("shopping_list")
-        .select(`
-          id,
-          recipe_id,
-          recipe_title,
-          amount,
-          unit,
-          name,
-          checked
-        `)
-        .order("created_at", { ascending: true });
+  // EINKAUFSLISTE AUS SUPABASE LADEN
+  useEffect(() => {
+    let cancelled = false;
 
-      if (error) {
-        throw error;
+    async function loadShoppingList() {
+      try {
+        const { data, error } = await supabase
+          .from("shopping_list")
+          .select(`
+            id,
+            recipe_id,
+            recipe_title,
+            amount,
+            unit,
+            name,
+            checked
+          `)
+          .order("created_at", { ascending: true });
+
+        if (error) throw error;
+
+        const loadedItems: ShoppingItem[] = (data ?? []).map(
+          (item) => ({
+            id: String(item.id),
+            recipeId: item.recipe_id ?? 0,
+            recipeTitle: item.recipe_title ?? "",
+            amount: String(item.amount ?? ""),
+            unit: item.unit ?? "",
+            name: item.name ?? "",
+            checked: item.checked ?? false,
+          })
+        );
+
+        if (!cancelled) {
+          setItems(loadedItems);
+          localStorage.setItem(
+            "shopping-list",
+            JSON.stringify(loadedItems)
+          );
+        }
+      } catch (error) {
+        console.error(
+          "Einkaufsliste konnte nicht geladen werden:",
+          error
+        );
+
+        if (!cancelled) {
+          alert("Die Einkaufsliste konnte nicht geladen werden.");
+        }
+      } finally {
+        if (!cancelled) setLoaded(true);
       }
-
-      const loadedItems: ShoppingItem[] = (data ?? []).map((item) => ({
-        id: item.id,
-        recipeId: item.recipe_id ?? 0,
-        recipeTitle: item.recipe_title,
-        amount: item.amount ?? "",
-        unit: item.unit ?? "",
-        name: item.name,
-        checked: item.checked ?? false,
-      }));
-
-      setItems(loadedItems);
-    } catch (error) {
-      console.error("Einkaufsliste konnte nicht geladen werden:", error);
-      setItems([]);
     }
 
-    setLoaded(true);
-  }
+    loadShoppingList();
 
-  loadShoppingList();
-}, []);
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
+  // GLEICHE ZUTATEN ZUSAMMENFASSEN
   const groupedItems = useMemo(() => {
     const groups = new Map<string, GroupedShoppingItem>();
 
     for (const item of items) {
       const normalizedName = item.name.trim().toLowerCase();
       const normalizedUnit = item.unit.trim().toLowerCase();
-      const key = `${normalizedName}-${normalizedUnit}`;
 
+      const key = `${normalizedName}-${normalizedUnit}`;
       const existingGroup = groups.get(key);
 
       if (!existingGroup) {
@@ -109,8 +134,13 @@ useEffect(() => {
         existingGroup.recipeTitles.push(item.recipeTitle);
       }
 
-      const existingAmount = Number(existingGroup.amount.replace(",", "."));
-      const newAmount = Number(item.amount.replace(",", "."));
+      const existingAmount = Number(
+        existingGroup.amount.replace(",", ".")
+      );
+
+      const newAmount = Number(
+        item.amount.replace(",", ".")
+      );
 
       if (
         Number.isFinite(existingAmount) &&
@@ -118,9 +148,12 @@ useEffect(() => {
         existingGroup.amount.trim() !== "" &&
         item.amount.trim() !== ""
       ) {
-        existingGroup.amount = String(existingAmount + newAmount);
+        existingGroup.amount = String(
+          existingAmount + newAmount
+        );
       } else if (item.amount.trim() !== "") {
-        existingGroup.amount = `${existingGroup.amount} + ${item.amount}`;
+        existingGroup.amount =
+          `${existingGroup.amount} + ${item.amount}`;
       }
 
       existingGroup.checked =
@@ -132,286 +165,394 @@ useEffect(() => {
     );
   }, [items]);
 
+  // ZUSTAND UND LOKALEN SPEICHER AKTUALISIEREN
   function saveItems(updatedItems: ShoppingItem[]) {
     setItems(updatedItems);
 
-    localStorage.setItem(
-      "shopping-list",
-      JSON.stringify(updatedItems)
-    );
-  }
-async function addManualItem(event: FormEvent<HTMLFormElement>) {
-  event.preventDefault();
-
-  const cleanedName = manualName.trim();
-
-  if (!cleanedName) {
-    alert("Bitte gib einen Artikel ein.");
-    return;
+    try {
+      localStorage.setItem(
+        "shopping-list",
+        JSON.stringify(updatedItems)
+      );
+    } catch (error) {
+      console.warn(
+        "Lokale Einkaufsliste konnte nicht gespeichert werden:",
+        error
+      );
+    }
   }
 
-  try {
-    const { data, error } = await supabase
-      .from("shopping_list")
-      .insert({
-        recipe_id: null,
-        recipe_title: "Manuell hinzugefügt",
-        amount: manualAmount.trim(),
-        unit: manualUnit.trim(),
-        name: cleanedName,
-        checked: false,
-      })
-      .select()
-      .single();
+  // ARTIKEL MANUELL HINZUFÜGEN
+  async function addManualItem(
+    event: FormEvent<HTMLFormElement>
+  ) {
+    event.preventDefault();
 
-    if (error) {
-      throw error;
+    const cleanedName = manualName.trim();
+
+    if (!cleanedName) {
+      alert("Bitte gib einen Artikel ein.");
+      return;
     }
 
-    const newItem: ShoppingItem = {
-      id: data.id,
-      recipeId: data.recipe_id ?? 0,
-      recipeTitle: data.recipe_title,
-      amount: data.amount ?? "",
-      unit: data.unit ?? "",
-      name: data.name,
-      checked: data.checked ?? false,
-    };
+    try {
+      const { data, error } = await supabase
+        .from("shopping_list")
+        .insert({
+          recipe_id: null,
+          recipe_title: "Manuell hinzugefügt",
+          amount: manualAmount.trim(),
+          unit: manualUnit.trim(),
+          name: cleanedName,
+          checked: false,
+        })
+        .select()
+        .single();
 
-    setItems((currentItems) => [...currentItems, newItem]);
+      if (error) throw error;
 
-    setManualAmount("");
-    setManualUnit("");
-    setManualName("");
-  } catch (error) {
-  console.error("Artikel konnte nicht hinzugefügt werden:", error);
+      const newItem: ShoppingItem = {
+        id: String(data.id),
+        recipeId: data.recipe_id ?? 0,
+        recipeTitle: data.recipe_title ?? "",
+        amount: String(data.amount ?? ""),
+        unit: data.unit ?? "",
+        name: data.name ?? "",
+        checked: data.checked ?? false,
+      };
 
-  const message =
-    error instanceof Error
-      ? error.message
-      : JSON.stringify(error);
+      saveItems([...items, newItem]);
 
-  alert(`Der Artikel konnte nicht hinzugefügt werden:\n${message}`);
-}
-}
-async function toggleGroup(group: GroupedShoppingItem) {
-  const shouldBeChecked = !group.checked;
+      setManualAmount("");
+      setManualUnit("");
+      setManualName("");
+    } catch (error) {
+      console.error(
+        "Artikel konnte nicht hinzugefügt werden:",
+        error
+      );
 
-  try {
-    const { error } = await supabase
-      .from("shopping_list")
-      .update({
-        checked: shouldBeChecked,
-      })
-      .in("id", group.ids);
-
-    if (error) {
-      throw error;
+      alert(
+        error instanceof Error
+          ? `Der Artikel konnte nicht hinzugefügt werden: ${error.message}`
+          : "Der Artikel konnte nicht hinzugefügt werden."
+      );
     }
+  }
 
-    setItems((currentItems) =>
-      currentItems.map((item) =>
+  // ARTIKEL ABHAKEN
+  async function toggleGroup(group: GroupedShoppingItem) {
+    const shouldBeChecked = !group.checked;
+
+    try {
+      const { error } = await supabase
+        .from("shopping_list")
+        .update({
+          checked: shouldBeChecked,
+        })
+        .in("id", group.ids);
+
+      if (error) throw error;
+
+      const updatedItems = items.map((item) =>
         group.ids.includes(item.id)
           ? {
               ...item,
               checked: shouldBeChecked,
             }
           : item
-      )
-    );
-  } catch (error) {
-    console.error("Artikel konnte nicht aktualisiert werden:", error);
-    alert("Der Artikel konnte nicht aktualisiert werden.");
-  }
-}
+      );
 
-async function deleteGroup(group: GroupedShoppingItem) {
-  try {
-    const { error } = await supabase
-      .from("shopping_list")
-      .delete()
-      .in("id", group.ids);
+      saveItems(updatedItems);
+    } catch (error) {
+      console.error(
+        "Artikel konnte nicht aktualisiert werden:",
+        error
+      );
 
-    if (error) {
-      throw error;
+      alert("Der Artikel konnte nicht aktualisiert werden.");
     }
-
-    setItems((currentItems) =>
-      currentItems.filter(
-        (item) => !group.ids.includes(item.id)
-      )
-    );
-  } catch (error) {
-    console.error("Artikel konnte nicht gelöscht werden:", error);
-    alert("Der Artikel konnte nicht gelöscht werden.");
   }
-}
 
- async function clearCheckedItems() {
-  try {
+  // EINZELNE ZUTAT ODER GRUPPE LÖSCHEN
+  async function deleteGroup(group: GroupedShoppingItem) {
+    try {
+      const { error } = await supabase
+        .from("shopping_list")
+        .delete()
+        .in("id", group.ids);
+
+      if (error) throw error;
+
+      const updatedItems = items.filter(
+        (item) => !group.ids.includes(item.id)
+      );
+
+      saveItems(updatedItems);
+    } catch (error) {
+      console.error(
+        "Artikel konnte nicht gelöscht werden:",
+        error
+      );
+
+      alert("Der Artikel konnte nicht gelöscht werden.");
+    }
+  }
+
+  // ABGEHAKTE ARTIKEL ENTFERNEN
+  async function clearCheckedItems() {
     const checkedIds = items
       .filter((item) => item.checked)
       .map((item) => item.id);
 
-    if (checkedIds.length === 0) {
-      return;
+    if (checkedIds.length === 0) return;
+
+    try {
+      const { error } = await supabase
+        .from("shopping_list")
+        .delete()
+        .in("id", checkedIds);
+
+      if (error) throw error;
+
+      const updatedItems = items.filter(
+        (item) => !item.checked
+      );
+
+      saveItems(updatedItems);
+    } catch (error) {
+      console.error(
+        "Abgehakte Artikel konnten nicht entfernt werden:",
+        error
+      );
+
+      alert("Abgehakte Artikel konnten nicht entfernt werden.");
     }
+  }
 
-    const { error } = await supabase
-      .from("shopping_list")
-      .delete()
-      .in("id", checkedIds);
+  // GESAMTE EINKAUFSLISTE LÖSCHEN
+  async function clearShoppingList() {
+    if (isClearing || items.length === 0) return;
 
-    if (error) {
-      throw error;
-    }
-
-    setItems((currentItems) =>
-      currentItems.filter((item) => !item.checked)
+    const confirmed = window.confirm(
+      "Möchtest du wirklich die gesamte Einkaufsliste löschen? Alle Artikel werden dauerhaft entfernt."
     );
-  } catch (error) {
-    console.error(error);
-    alert("Abgehakte Artikel konnten nicht entfernt werden.");
-  }
-}
 
- async function clearShoppingList() {
-  const confirmed = window.confirm(
-    "Möchtest du die gesamte Einkaufsliste löschen?"
-  );
+    if (!confirmed) return;
 
-  if (!confirmed) {
-    return;
-  }
+    setIsClearing(true);
 
-  try {
-    const { error } = await supabase
-      .from("shopping_list")
-      .delete()
-      .neq("id", "");
+    try {
+      // Nur die IDs der tatsächlich geladenen Artikel löschen.
+      // Dadurch funktioniert die Abfrage auch mit UUID-Spalten.
+      const ids = items.map((item) => item.id);
 
-    if (error) {
-      throw error;
+      const { data: deletedItems, error } = await supabase
+        .from("shopping_list")
+        .delete()
+        .in("id", ids)
+        .select("id");
+
+      if (error) throw error;
+
+      const deletedIds = new Set(
+        (deletedItems ?? []).map((item) => String(item.id))
+      );
+
+      // Sicherstellen, dass Supabase die Einträge
+      // tatsächlich gelöscht hat.
+      if (deletedIds.size !== ids.length) {
+        throw new Error(
+          "Nicht alle Artikel konnten gelöscht werden. Bitte prüfe die Zugriffsrechte in Supabase."
+        );
+      }
+
+      // Auch den lokalen Speicher vollständig leeren.
+      saveItems([]);
+    } catch (error) {
+      console.error(
+        "Einkaufsliste konnte nicht gelöscht werden:",
+        error
+      );
+
+      alert(
+        error instanceof Error
+          ? `Die Einkaufsliste konnte nicht vollständig gelöscht werden: ${error.message}`
+          : "Die Einkaufsliste konnte nicht gelöscht werden."
+      );
+
+      // Nach einem Fehler den tatsächlichen Datenbankstand laden.
+      try {
+        const { data, error: reloadError } = await supabase
+          .from("shopping_list")
+          .select(`
+            id,
+            recipe_id,
+            recipe_title,
+            amount,
+            unit,
+            name,
+            checked
+          `)
+          .order("created_at", { ascending: true });
+
+        if (!reloadError) {
+          saveItems(
+            (data ?? []).map((item) => ({
+              id: String(item.id),
+              recipeId: item.recipe_id ?? 0,
+              recipeTitle: item.recipe_title ?? "",
+              amount: String(item.amount ?? ""),
+              unit: item.unit ?? "",
+              name: item.name ?? "",
+              checked: item.checked ?? false,
+            }))
+          );
+        }
+      } catch (reloadError) {
+        console.error(
+          "Einkaufsliste konnte nicht neu geladen werden:",
+          reloadError
+        );
+      }
+    } finally {
+      setIsClearing(false);
     }
-
-    setItems([]);
-  } catch (error) {
-    console.error(error);
-    alert("Die Einkaufsliste konnte nicht gelöscht werden.");
   }
-}
 
+  // LADEANSICHT
   if (!loaded) {
     return (
-      <main className="min-h-screen bg-stone-100 p-8">
+      <main className="min-h-screen bg-[#F6F4F0] p-8 text-[#526655]">
         Einkaufsliste wird geladen...
       </main>
     );
   }
 
   return (
-    <main className="min-h-screen bg-stone-100 px-5 py-8">
+    <main className="min-h-screen bg-[#F6F4F0] px-4 py-6 pb-28 sm:px-6 sm:py-8">
       <div className="mx-auto max-w-3xl">
+
+        {/* ZURÜCK */}
         <Link
           href="/"
-          className="mb-6 block text-green-700 hover:underline"
+          className="mb-5 inline-block text-sm font-medium text-[#526655] hover:underline"
         >
           ← Zurück zur Übersicht
         </Link>
 
-        <div className="flex items-start justify-between gap-5">
+        {/* ÜBERSCHRIFT */}
+        <div className="flex flex-wrap items-start justify-between gap-4">
           <div>
-            <h1 className="text-4xl font-bold text-stone-900">
+            <h1 className="text-3xl font-semibold text-[#292B29] sm:text-4xl">
               Einkaufsliste
             </h1>
 
-            <p className="mt-2 text-stone-600">
+            <p className="mt-2 text-sm text-[#858780]">
               Gleiche Zutaten werden automatisch zusammengefasst.
             </p>
           </div>
 
+          {/* ALLES LÖSCHEN */}
           {items.length > 0 && (
             <button
               type="button"
               onClick={clearShoppingList}
-              className="rounded-xl bg-red-100 px-4 py-2 text-sm font-medium text-red-700"
+              disabled={isClearing}
+              className="rounded-xl border border-[#EADBD6] bg-[#F4EEEB] px-4 py-3 text-sm font-medium text-[#956B62] transition hover:bg-[#EDE2DD] disabled:cursor-not-allowed disabled:opacity-50"
             >
-              Alles löschen
+              {isClearing
+                ? "Wird gelöscht..."
+                : "Alles löschen"}
             </button>
           )}
         </div>
+
+        {/* MANUELLEN ARTIKEL HINZUFÜGEN */}
         <form
-  onSubmit={addManualItem}
-  className="mt-8 rounded-2xl bg-white p-5 shadow-sm"
->
-  <h2 className="text-xl font-semibold text-stone-900">
-    Artikel hinzufügen
-  </h2>
+          onSubmit={addManualItem}
+          className="mt-8 rounded-2xl border border-[#E8E5DF] bg-white p-5 shadow-sm"
+        >
+          <h2 className="text-lg font-semibold text-[#292B29]">
+            Artikel hinzufügen
+          </h2>
 
-  <div className="mt-4 grid gap-3 sm:grid-cols-[100px_130px_1fr_auto]">
-    <input
-      value={manualAmount}
-      onChange={(event) => setManualAmount(event.target.value)}
-      placeholder="Menge"
-      className="min-w-0 rounded-xl border border-stone-300 bg-white p-3 text-stone-900"
-    />
+          <div className="mt-4 grid gap-3 sm:grid-cols-[100px_130px_1fr_auto]">
+            <input
+              value={manualAmount}
+              onChange={(event) =>
+                setManualAmount(event.target.value)
+              }
+              placeholder="Menge"
+              aria-label="Menge"
+              className={inputClass}
+            />
 
-    <input
-      value={manualUnit}
-      onChange={(event) => setManualUnit(event.target.value)}
-      placeholder="Einheit"
-      className="min-w-0 rounded-xl border border-stone-300 bg-white p-3 text-stone-900"
-    />
+            <input
+              value={manualUnit}
+              onChange={(event) =>
+                setManualUnit(event.target.value)
+              }
+              placeholder="Einheit"
+              aria-label="Einheit"
+              className={inputClass}
+            />
 
-    <input
-      value={manualName}
-      onChange={(event) => setManualName(event.target.value)}
-      placeholder="Zum Beispiel Brot"
-      className="min-w-0 rounded-xl border border-stone-300 bg-white p-3 text-stone-900"
-    />
+            <input
+              value={manualName}
+              onChange={(event) =>
+                setManualName(event.target.value)
+              }
+              placeholder="Zum Beispiel Brot"
+              aria-label="Artikelname"
+              className={inputClass}
+            />
 
-    <button
-      type="submit"
-      className="rounded-xl bg-green-700 px-5 py-3 font-medium text-white"
-    >
-      Hinzufügen
-    </button>
-  </div>
-</form>
+            <button
+              type="submit"
+              className="rounded-xl bg-[#526655] px-5 py-3 font-medium text-white transition hover:bg-[#3D5041]"
+            >
+              Hinzufügen
+            </button>
+          </div>
+        </form>
 
+        {/* LEERE EINKAUFSLISTE */}
         {groupedItems.length === 0 ? (
-          <div className="mt-8 rounded-2xl bg-white p-6 shadow-sm">
-            <p className="text-stone-600">
+          <div className="mt-8 rounded-2xl border border-[#E8E5DF] bg-white p-6 shadow-sm">
+            <p className="text-[#858780]">
               Deine Einkaufsliste ist noch leer.
             </p>
 
             <Link
               href="/"
-              className="mt-3 inline-block font-medium text-green-700 hover:underline"
+              className="mt-3 inline-block font-medium text-[#526655] hover:underline"
             >
               Rezepte auswählen →
             </Link>
           </div>
         ) : (
           <>
+            {/* EINKAUFSARTIKEL */}
             <div className="mt-8 space-y-3">
               {groupedItems.map((item) => (
                 <div
                   key={item.key}
-                  className="flex items-center gap-4 rounded-xl bg-white p-4 shadow-sm"
+                  className="flex items-center gap-3 rounded-xl border border-[#E8E5DF] bg-white p-4 shadow-sm sm:gap-4"
                 >
                   <input
                     type="checkbox"
                     checked={item.checked}
                     onChange={() => toggleGroup(item)}
-                    className="h-5 w-5"
+                    aria-label={`${item.name} abhaken`}
+                    className="h-5 w-5 shrink-0 accent-[#526655]"
                   />
 
                   <div className="min-w-0 flex-1">
                     <p
-                      className={`text-stone-900 ${
+                      className={`text-[#292B29] ${
                         item.checked
-                          ? "text-stone-400 line-through"
+                          ? "text-[#858780] line-through"
                           : ""
                       }`}
                     >
@@ -421,17 +562,20 @@ async function deleteGroup(group: GroupedShoppingItem) {
                       {item.name}
                     </p>
 
-                   <p className="mt-1 text-sm text-stone-500">
-  {item.recipeTitles.includes("Manuell hinzugefügt")
-    ? "Manuell hinzugefügt"
-    : `Für: ${item.recipeTitles.join(", ")}`}
-</p>
+                    <p className="mt-1 text-xs text-[#858780] sm:text-sm">
+                      {item.recipeTitles.includes(
+                        "Manuell hinzugefügt"
+                      )
+                        ? "Manuell hinzugefügt"
+                        : `Für: ${item.recipeTitles.join(", ")}`}
+                    </p>
                   </div>
 
                   <button
                     type="button"
                     onClick={() => deleteGroup(item)}
-                    className="rounded-lg bg-red-100 px-3 py-2 text-sm text-red-700"
+                    aria-label={`${item.name} löschen`}
+                    className="shrink-0 rounded-lg bg-[#F4EEEB] px-3 py-2 text-sm font-medium text-[#956B62] transition hover:bg-[#EDE2DD]"
                   >
                     Löschen
                   </button>
@@ -439,10 +583,12 @@ async function deleteGroup(group: GroupedShoppingItem) {
               ))}
             </div>
 
+            {/* ABGEHAKTE ARTIKEL ENTFERNEN */}
             <button
               type="button"
               onClick={clearCheckedItems}
-              className="mt-6 rounded-xl bg-stone-200 px-5 py-3 font-medium text-stone-800"
+              disabled={!items.some((item) => item.checked)}
+              className="mt-6 rounded-xl border border-[#E8E5DF] bg-white px-5 py-3 font-medium text-[#526655] transition hover:bg-[#E5EAE3] disabled:cursor-not-allowed disabled:opacity-40"
             >
               Abgehakte entfernen
             </button>

@@ -1,3 +1,4 @@
+
 "use client";
 
 import { supabase } from "@/lib/supabase";
@@ -8,7 +9,6 @@ import {
   useSearchParams,
 } from "next/navigation";
 import { useEffect, useState } from "react";
-
 
 type Ingredient = {
   amount: string;
@@ -22,238 +22,251 @@ type Recipe = {
   ingredients: Ingredient[];
   instructions: string;
   tags: string[];
-  favorite?: boolean;
-  rating?: number;
+  favorite: boolean;
+  rating: number;
   cookingTime?: number;
   image?: string;
-};
-
-type ShoppingItem = {
-  id: string;
-  recipeId: number;
-  recipeTitle: string;
-  amount: string;
-  unit: string;
-  name: string;
-  checked: boolean;
+  userId: string;
+  visibility: "private" | "public";
 };
 
 export default function RecipePage() {
   const params = useParams();
-    const router = useRouter();
-    const searchParams = useSearchParams();
+  const router = useRouter();
+  const searchParams = useSearchParams();
 
   const [recipe, setRecipe] = useState<Recipe | null>(null);
+  const [userId, setUserId] = useState<string | null>(null);
   const [loaded, setLoaded] = useState(false);
+  const [savingVisibility, setSavingVisibility] = useState(false);
 
-useEffect(() => {
-  async function loadRecipe() {
-    const recipeId = Number(params.id);
+  useEffect(() => {
+    let active = true;
 
-    if (!Number.isFinite(recipeId)) {
-      setRecipe(null);
-      setLoaded(true);
-      return;
+    async function loadRecipe() {
+      const recipeId = Number(params.id);
+
+      if (!Number.isFinite(recipeId)) {
+        if (active) {
+          setRecipe(null);
+          setLoaded(true);
+        }
+        return;
+      }
+
+      try {
+        const {
+          data: { user },
+          error: authError,
+        } = await supabase.auth.getUser();
+
+        if (authError) throw authError;
+
+        const { data, error } = await supabase
+          .from("recipes")
+          .select(`
+            id,
+            title,
+            instructions,
+            cooking_time,
+            image,
+            favorite,
+            rating,
+            user_id,
+            visibility,
+            recipe_ingredients (
+              amount,
+              unit,
+              name
+            ),
+            recipe_tags (
+              tag
+            )
+          `)
+          .eq("id", recipeId)
+          .single();
+
+        if (error) throw error;
+
+        if (!active) return;
+
+        setUserId(user?.id ?? null);
+
+        setRecipe({
+          id: data.id,
+          title: data.title,
+          instructions: data.instructions ?? "",
+          cookingTime: data.cooking_time ?? undefined,
+          image: data.image ?? undefined,
+          favorite: data.favorite ?? false,
+          rating: data.rating ?? 0,
+          userId: data.user_id,
+          visibility:
+            data.visibility === "public" ? "public" : "private",
+
+          ingredients: (data.recipe_ingredients ?? []).map(
+            (ingredient) => ({
+              amount: ingredient.amount ?? "",
+              unit: ingredient.unit ?? "",
+              name: ingredient.name,
+            })
+          ),
+
+          tags: (data.recipe_tags ?? []).map(
+            (tagEntry) => tagEntry.tag
+          ),
+        });
+      } catch (error) {
+        console.error("Rezept konnte nicht geladen werden:", error);
+
+        if (active) setRecipe(null);
+      } finally {
+        if (active) setLoaded(true);
+      }
     }
+
+    loadRecipe();
+
+    return () => {
+      active = false;
+    };
+  }, [params.id]);
+
+  const isOwner = !!recipe && !!userId && recipe.userId === userId;
+
+  async function changeVisibility(
+    newVisibility: "private" | "public"
+  ) {
+    if (!recipe || !isOwner || savingVisibility) return;
+
+    if (newVisibility === recipe.visibility) return;
+
+    const confirmed =
+      newVisibility === "public"
+        ? window.confirm(
+            "Dieses Rezept wird im Großen Archiv für andere Nutzer sichtbar. Möchtest du es veröffentlichen?"
+          )
+        : window.confirm(
+            "Dieses Rezept wird wieder privat und verschwindet aus dem Großen Archiv. Fortfahren?"
+          );
+
+    if (!confirmed) return;
+
+    setSavingVisibility(true);
 
     try {
       const { data, error } = await supabase
         .from("recipes")
-        .select(`
-          id,
-          title,
-          instructions,
-          cooking_time,
-          image,
-          favorite,
-          rating,
-          recipe_ingredients (
-            amount,
-            unit,
-            name
-          ),
-          recipe_tags (
-            tag
-          )
-        `)
-        .eq("id", recipeId)
+        .update({
+          visibility: newVisibility,
+          updated_at: new Date().toISOString(),
+        })
+        .eq("id", recipe.id)
+        .eq("user_id", userId)
+        .select("visibility")
         .single();
 
-      if (error) {
-        throw error;
-      }
+      if (error) throw error;
 
-      setRecipe({
-        id: data.id,
-        title: data.title,
-        instructions: data.instructions ?? "",
-        cookingTime: data.cooking_time ?? undefined,
-        image: data.image ?? undefined,
-        favorite: data.favorite ?? false,
-        rating: data.rating ?? 0,
-
-        ingredients: (data.recipe_ingredients ?? []).map(
-          (ingredient) => ({
-            amount: ingredient.amount ?? "",
-            unit: ingredient.unit ?? "",
-            name: ingredient.name,
-          })
-        ),
-
-        tags: (data.recipe_tags ?? []).map(
-          (tagEntry) => tagEntry.tag
-        ),
-      });
+      setRecipe((current) =>
+        current
+          ? {
+              ...current,
+              visibility:
+                data.visibility === "public"
+                  ? "public"
+                  : "private",
+            }
+          : current
+      );
     } catch (error) {
-      console.error("Rezept konnte nicht geladen werden:", error);
-      setRecipe(null);
-    }
+      console.error(
+        "Sichtbarkeit konnte nicht gespeichert werden:",
+        error
+      );
 
-    setLoaded(true);
+      alert("Die Sichtbarkeit konnte nicht gespeichert werden.");
+    } finally {
+      setSavingVisibility(false);
+    }
   }
 
-  loadRecipe();
-}, [params.id]);
+  async function updateRecipe(
+    changes: Partial<Pick<Recipe, "favorite" | "rating">>
+  ) {
+    if (!recipe || !isOwner) return;
 
-async function updateRecipe(updatedRecipe: Recipe) {
-  try {
-    const { error } = await supabase
-      .from("recipes")
-      .update({
-        favorite: updatedRecipe.favorite ?? false,
-        rating: updatedRecipe.rating ?? 0,
-        updated_at: new Date().toISOString(),
-      })
-      .eq("id", updatedRecipe.id);
+    try {
+      const { error } = await supabase
+        .from("recipes")
+        .update({
+          ...changes,
+          updated_at: new Date().toISOString(),
+        })
+        .eq("id", recipe.id)
+        .eq("user_id", userId);
 
-    if (error) {
-      throw error;
+      if (error) throw error;
+
+      setRecipe((current) =>
+        current ? { ...current, ...changes } : current
+      );
+    } catch (error) {
+      console.error(
+        "Änderung konnte nicht gespeichert werden:",
+        error
+      );
+
+      alert("Die Änderung konnte nicht gespeichert werden.");
     }
-
-    setRecipe(updatedRecipe);
-  } catch (error) {
-    console.error("Änderung konnte nicht gespeichert werden:", error);
-    alert("Die Änderung konnte nicht gespeichert werden.");
   }
-}
 
-  function toggleFavorite() {
-    if (!recipe) {
+  async function addToShoppingList() {
+    if (!recipe) return;
+
+    if (!userId) {
+      alert("Bitte melde dich zuerst an.");
       return;
     }
 
-    updateRecipe({
-      ...recipe,
-      favorite: !recipe.favorite,
-    });
-  }
-
-  function setRating(rating: number) {
-    if (!recipe) {
+    if (recipe.ingredients.length === 0) {
+      alert("Dieses Rezept enthält keine Zutaten.");
       return;
     }
 
-    updateRecipe({
-      ...recipe,
-      rating,
-    });
-  }
+    try {
+      const newItems = recipe.ingredients.map((ingredient) => ({
+        recipe_id: recipe.id,
+        recipe_title: recipe.title,
+        amount: ingredient.amount,
+        unit: ingredient.unit,
+        name: ingredient.name,
+        checked: false,
+        user_id: userId,
+      }));
 
- async function addToShoppingList() {
-  if (!recipe) {
-    return;
-  }
+      const { error } = await supabase
+        .from("shopping_list")
+        .insert(newItems);
 
-  try {
-    const newItems = recipe.ingredients.map((ingredient) => ({
-      recipe_id: recipe.id,
-      recipe_title: recipe.title,
-      amount: ingredient.amount,
-      unit: ingredient.unit,
-      name: ingredient.name,
-      checked: false,
-    }));
+      if (error) throw error;
 
-    const { error } = await supabase
-      .from("shopping_list")
-      .insert(newItems);
+      alert("Die Zutaten wurden zur Einkaufsliste hinzugefügt.");
+    } catch (error) {
+      console.error(
+        "Zutaten konnten nicht zur Einkaufsliste hinzugefügt werden:",
+        error
+      );
 
-    if (error) {
-      throw error;
+      alert(
+        "Die Zutaten konnten nicht zur Einkaufsliste hinzugefügt werden."
+      );
     }
-
-    alert("Die Zutaten wurden zur Einkaufsliste hinzugefügt.");
-  } catch (error) {
-    console.error(
-      "Zutaten konnten nicht zur Einkaufsliste hinzugefügt werden:",
-      error
-    );
-
-    alert(
-      "Die Zutaten konnten nicht zur Einkaufsliste hinzugefügt werden."
-    );
-  }
-}
-async function deleteRecipe() {
-  if (!recipe) {
-    return;
   }
 
-  const confirmed = window.confirm(
-    `Möchtest du „${recipe.title}“ wirklich löschen?`
-  );
-
-  if (!confirmed) {
-    return;
-  }
-
-  try {
-    const { error: ingredientsError } = await supabase
-      .from("recipe_ingredients")
-      .delete()
-      .eq("recipe_id", recipe.id);
-
-    if (ingredientsError) {
-      throw ingredientsError;
-    }
-
-    const { error: tagsError } = await supabase
-      .from("recipe_tags")
-      .delete()
-      .eq("recipe_id", recipe.id);
-
-    if (tagsError) {
-      throw tagsError;
-    }
-
-    const { error: shoppingListError } = await supabase
-      .from("shopping_list")
-      .delete()
-      .eq("recipe_id", recipe.id);
-
-    if (shoppingListError) {
-      throw shoppingListError;
-    }
-
-    const { error: recipeError } = await supabase
-      .from("recipes")
-      .delete()
-      .eq("id", recipe.id);
-
-    if (recipeError) {
-      throw recipeError;
-    }
-
-    router.push("/");
-    router.refresh();
-  } catch (error) {
-    console.error("Rezept konnte nicht gelöscht werden:", error);
-    alert("Das Rezept konnte nicht gelöscht werden.");
-  }
-}
   if (!loaded) {
     return (
-      <main className="min-h-screen bg-stone-100 px-5 py-8">
+      <main className="min-h-screen bg-[#F7F3EC] px-5 py-8">
         <div className="mx-auto max-w-3xl text-stone-600">
           Rezept wird geladen...
         </div>
@@ -263,7 +276,7 @@ async function deleteRecipe() {
 
   if (!recipe) {
     return (
-      <main className="min-h-screen bg-stone-100 px-5 py-8">
+      <main className="min-h-screen bg-[#F7F3EC] px-5 py-8">
         <div className="mx-auto max-w-3xl">
           <h1 className="text-3xl font-bold text-stone-900">
             Rezept nicht gefunden
@@ -279,20 +292,22 @@ async function deleteRecipe() {
       </main>
     );
   }
-const selectedTag = searchParams.get("tag");
 
-const backHref = selectedTag
-  ? `/?tag=${encodeURIComponent(selectedTag)}`
-  : "/";
+  const selectedTag = searchParams.get("tag");
+
+  const backHref = selectedTag
+    ? `/?tag=${encodeURIComponent(selectedTag)}`
+    : "/";
+
   return (
-    <main className="min-h-screen bg-stone-100 px-4 py-6 pb-24 sm:px-6 sm:py-8">
+    <main className="min-h-screen bg-[#F7F3EC] px-4 py-6 pb-24 sm:px-6 sm:py-8">
       <div className="mx-auto max-w-3xl">
         <Link
-  href={backHref}
-  className="mb-6 inline-block text-green-700 hover:underline"
->
-  ← Zurück zur Übersicht
-</Link>
+          href={backHref}
+          className="mb-6 inline-block text-[#526655] hover:underline"
+        >
+          ← Zurück zur Übersicht
+        </Link>
 
         <article className="overflow-hidden rounded-2xl bg-white shadow-sm">
           <div className="relative">
@@ -310,17 +325,25 @@ const backHref = selectedTag
               </div>
             )}
 
-            <button
-              type="button"
-              onClick={toggleFavorite}
-              aria-label="Favorit ändern"
-              aria-pressed={recipe.favorite === true}
-              className={`absolute right-4 top-4 flex h-12 w-12 items-center justify-center rounded-full bg-white/95 text-3xl shadow-md transition hover:scale-105 active:scale-90 ${
-                recipe.favorite ? "text-red-500" : "text-stone-500"
-              }`}
-            >
-              {recipe.favorite ? "♥" : "♡"}
-            </button>
+            {isOwner && (
+              <button
+                type="button"
+                onClick={() =>
+                  updateRecipe({
+                    favorite: !recipe.favorite,
+                  })
+                }
+                aria-label="Favorit ändern"
+                aria-pressed={recipe.favorite}
+                className={`absolute right-4 top-4 flex h-12 w-12 items-center justify-center rounded-full bg-white/95 text-3xl shadow-md transition hover:scale-105 ${
+                  recipe.favorite
+                    ? "text-red-500"
+                    : "text-stone-500"
+                }`}
+              >
+                {recipe.favorite ? "♥" : "♡"}
+              </button>
+            )}
           </div>
 
           <div className="p-5 sm:p-8">
@@ -331,21 +354,36 @@ const backHref = selectedTag
                 </h1>
 
                 <div className="mt-3 flex items-center gap-0.5">
-                  {[1, 2, 3, 4, 5].map((star) => (
-                    <button
-                      key={star}
-                      type="button"
-                      onClick={() => setRating(star)}
-                      className={`text-2xl transition hover:scale-110 sm:text-3xl ${
-                        star <= (recipe.rating ?? 0)
-                          ? "text-yellow-500"
-                          : "text-stone-300"
-                      }`}
-                      aria-label={`${star} Sterne vergeben`}
-                    >
-                      ★
-                    </button>
-                  ))}
+                  {[1, 2, 3, 4, 5].map((star) =>
+                    isOwner ? (
+                      <button
+                        key={star}
+                        type="button"
+                        onClick={() =>
+                          updateRecipe({ rating: star })
+                        }
+                        className={`text-2xl transition hover:scale-110 sm:text-3xl ${
+                          star <= recipe.rating
+                            ? "text-yellow-500"
+                            : "text-stone-300"
+                        }`}
+                        aria-label={`${star} Sterne vergeben`}
+                      >
+                        ★
+                      </button>
+                    ) : (
+                      <span
+                        key={star}
+                        className={`text-2xl sm:text-3xl ${
+                          star <= recipe.rating
+                            ? "text-yellow-500"
+                            : "text-stone-300"
+                        }`}
+                      >
+                        ★
+                      </span>
+                    )
+                  )}
                 </div>
 
                 <div className="mt-4 flex flex-wrap gap-2 text-sm text-stone-600">
@@ -361,40 +399,89 @@ const backHref = selectedTag
                 </div>
               </div>
 
-             <div className="flex shrink-0 flex-wrap gap-2">
-  <button
-    type="button"
-    onClick={addToShoppingList}
-    className="rounded-xl bg-green-700 px-4 py-2.5 font-medium text-white transition hover:bg-green-600"
-  >
-    Zur Einkaufsliste
-  </button>
+              <div className="flex shrink-0 flex-wrap gap-2">
+                <button
+                  type="button"
+                  onClick={addToShoppingList}
+                  className="rounded-xl bg-[#526655] px-4 py-2.5 font-medium text-white transition hover:bg-[#3D5041]"
+                >
+                  Zur Einkaufsliste
+                </button>
 
-  <Link
-    href={`/rezepte/${recipe.id}/bearbeiten`}
-    className="rounded-xl bg-stone-200 px-4 py-2.5 font-medium text-stone-800 transition hover:bg-stone-300"
-  >
-    Bearbeiten
-  </Link>
+                {isOwner && (
+                  <Link
+                    href={`/rezepte/${recipe.id}/bearbeiten`}
+                    className="rounded-xl bg-stone-200 px-4 py-2.5 font-medium text-stone-800 transition hover:bg-stone-300"
+                  >
+                    Bearbeiten
+                  </Link>
+                )}
+              </div>
+            </div>
 
-    <button
-    type="button"
-    onClick={deleteRecipe}
-    className="rounded-xl bg-red-100 px-4 py-2.5 font-medium text-red-700 transition hover:bg-red-200"
-  >
-    Rezept löschen
-  </button>
-</div>
-</div>
+            {/* Sichtbarkeit */}
+            <section className="mt-7 rounded-2xl border border-[#E8E5DF] bg-[#F6F4F0] p-4 sm:p-5">
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <div>
+                  <h2 className="font-semibold text-[#292B29]">
+                    Sichtbarkeit
+                  </h2>
 
-{recipe.tags.map((tag, index) => (
-  <span
-    key={`${tag}-${index}`}
-    className="rounded-full bg-green-100 px-3 py-1 text-sm text-green-800"
-  >
-    {tag}
-  </span>
-))}
+                  <p className="mt-1 text-sm text-[#858780]">
+                    {recipe.visibility === "public"
+                      ? "Dieses Rezept ist im Großen Archiv sichtbar."
+                      : "Dieses Rezept ist nur für dich sichtbar."}
+                  </p>
+                </div>
+
+                {isOwner ? (
+                  <div className="inline-flex rounded-xl border border-[#E8E5DF] bg-white p-1">
+                    <button
+                      type="button"
+                      disabled={savingVisibility}
+                      onClick={() => changeVisibility("private")}
+                      className={`rounded-lg px-4 py-2 text-sm font-medium transition ${
+                        recipe.visibility === "private"
+                          ? "bg-[#526655] text-white"
+                          : "text-[#526655] hover:bg-[#E5EAE3]"
+                      }`}
+                    >
+                      Privat
+                    </button>
+
+                    <button
+                      type="button"
+                      disabled={savingVisibility}
+                      onClick={() => changeVisibility("public")}
+                      className={`rounded-lg px-4 py-2 text-sm font-medium transition ${
+                        recipe.visibility === "public"
+                          ? "bg-[#526655] text-white"
+                          : "text-[#526655] hover:bg-[#E5EAE3]"
+                      }`}
+                    >
+                      Öffentlich
+                    </button>
+                  </div>
+                ) : (
+                  <span className="rounded-full bg-[#E5EAE3] px-3 py-1.5 text-xs font-medium text-[#3D5041]">
+                    Öffentlich
+                  </span>
+                )}
+              </div>
+            </section>
+
+            {recipe.tags.length > 0 && (
+              <div className="mt-6 flex flex-wrap gap-2">
+                {recipe.tags.map((tag, index) => (
+                  <span
+                    key={`${tag}-${index}`}
+                    className="rounded-full bg-green-100 px-3 py-1 text-sm text-green-800"
+                  >
+                    {tag}
+                  </span>
+                ))}
+              </div>
+            )}
 
             <section className="mt-9">
               <h2 className="text-xl font-semibold text-stone-900">
